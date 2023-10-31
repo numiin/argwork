@@ -1,0 +1,286 @@
+#!/bin/bash
+
+set -e
+
+__argwork_message() {
+  local message="$1"
+  if [ -t 1 ]
+  then
+    >&2 echo -e "$(tput setaf 9)==> $(tput setaf 3)${message}$(tput sgr0)"
+  else
+    >&2 echo -e "==> $message"
+  fi
+}
+
+__argwork_error() {
+  __argwork_message "$1"
+  exit 1
+}
+
+__argwork_capture_match_file() {
+  if $(cat "$ARGWORK_CLI_DIR/$2" | grep -q "^$1\$")
+  then
+    __ARGWORK_CAPTURED="$1"
+  else
+    __ARGWORK_MESSAGE="value [$1] is not at [$2]"
+  fi
+}
+
+__argwork_capture_match_values() {
+  local val="$1"
+  for el in "${__argwork_arg_list[@]}";
+  do
+    [[ "$el" == "$val" ]] && __ARGWORK_CAPTURED="$val"
+  done
+  if [[ -z "$__ARGWORK_CAPTURED" ]]
+  then
+    __ARGWORK_MESSAGE="value [$val] is not in [${__argwork_arg_list[@]}]"
+  fi
+}
+
+__argwork_capture_match_shell() {
+  if $(eval "$2" | grep -q "^$1\$")
+  then
+    __ARGWORK_CAPTURED="$1"
+  else
+    __ARGWORK_MESSAGE="value [$1] is not found in output from [$2]"
+  fi
+}
+
+__argwork_capture_match_command() {
+  if $(eval "$2 ${__argwork_arg_list[@]}" | grep -q "^$1\$")
+  then
+    __ARGWORK_CAPTURED="$1"
+  else
+    __ARGWORK_MESSAGE="value [$1] is not found in output from [$2]"
+  fi
+}
+
+__argwork_capture_uuid() {
+  if [[ "$1" =~ ^\{?[A-F0-9a-f]{8}-[A-F0-9a-f]{4}-[A-F0-9a-f]{4}-[A-F0-9a-f]{4}-[A-F0-9a-f]{12}\}?$ ]]
+  then
+    __ARGWORK_CAPTURED="$1"
+  else
+    __ARGWORK_MESSAGE="[$1] not UUID"
+  fi
+}
+
+__argwork_capture_date() {
+  local val="$1"
+  local date_result="$(date -d "$val" '+%Y-%m-%d' 2>&1)"
+  local date_exit_code="$?"
+  [[ "$?" == 0 && "$date_result" == "$val" ]] && __ARGWORK_CAPTURED="$1" || __ARGWORK_MESSAGE="[$1] not DATE"
+}
+
+__argwork_capture_text() {
+  local val="$1"
+  local op="$2"
+  local len="$3"
+
+  local is_set=
+  case "$op" in
+    eq) if [[ "${#val}" -eq "$len" ]]; then is_set=1; fi ;;
+    lt) if [[ "${#val}" -lt "$len" ]]; then is_set=1; fi ;;
+    gt) if [[ "${#val}" -gt "$len" ]]; then is_set=1; fi ;;
+    le) if [[ "${#val}" -le "$len" ]]; then is_set=1; fi ;;
+    ge) if [[ "${#val}" -ge "$len" ]]; then is_set=1; fi ;;
+    '') is_set=1; ;;
+  esac
+  if [[ ! -z "$is_set" ]]
+  then
+    __ARGWORK_CAPTURED="$val"
+  else
+    __ARGWORK_MESSAGE="[$1] out of range"
+  fi
+}
+
+__argwork_capture_regex() {
+  if $(echo "$1" | grep -q "$2")
+  then
+    __ARGWORK_CAPTURED="$1"
+  else
+    __ARGWORK_MESSAGE="[$1] does not match /$2/"
+  fi
+}
+
+__argwork_capture_integer() {
+  if $(echo "$1" | grep -q '^[0-9]*$')
+  then
+    __ARGWORK_CAPTURED="$1"
+  else
+    __ARGWORK_MESSAGE="[$1] not integer"
+  fi
+}
+
+__argwork_capture_any() {
+  __ARGWORK_CAPTURED="$1"
+}
+
+__argwork_one() {
+  local index="$1"
+  local val=
+  local var="$2"
+  local type="$3"
+
+  # '_' in variable name is a bypass marker
+  [[ "$var" == '_' ]] && return 0
+
+  case "$index" in
+    _)
+      val="${__argwork_arg_map[$var]}"
+      ;;
+    *)
+      val="${__argwork_arg_map["$index"]}"
+      if [[ -z "$val" ]]
+      then
+        __argwork_error "value [$var] must have value"
+      fi
+      ;;
+  esac
+
+  if [[ -z "$var" ]]
+  then
+    __argwork_error 'assertion must have variable name in second argument'
+  fi
+
+  __ARGWORK_CAPTURED=
+  __ARGWORK_MESSAGE=
+  __ARGWORK_IGNORE_CAPTURE=false
+
+  case "$type" in
+    from)
+      __argwork_capture_match_file "$val" "$4"
+      ;;
+    opts)
+      __argwork_arg_list=(${@:4})
+      __argwork_capture_match_values "$val"
+      ;;
+    shell)
+      __argwork_capture_match_shell "$val" "$4"
+      ;;
+    command)
+      __argwork_arg_list=()
+      __argwork_capture_match_command "$val" "$4"
+      ;;
+    uuid)
+      __argwork_capture_uuid "$val"
+      ;;
+    date)
+      __argwork_capture_date "$val"
+      ;;
+    text)
+      __argwork_capture_text "$val" "$4" "$5" "$6"
+      ;;
+    regex)
+      __argwork_capture_regex "$val" "$4"
+      ;;
+    integer)
+      __argwork_capture_integer "$val"
+      ;;
+    _)
+      __argwork_capture_any "$val"
+      ;;
+    ...)
+      ;;
+    *)
+      __argwork_error "unknown type [$type]"
+      ;;
+  esac
+
+  case "$index" in
+    _)
+      if [[ "$val" == '_' ]]
+      then
+        __ARGWORK_IGNORE_CAPTURE=true
+      else
+        if [[ ! -z "$val"  && ! -z "$__ARGWORK_MESSAGE" ]]
+        then
+          __argwork_error "$__ARGWORK_MESSAGE"
+        fi
+      fi
+      ;;
+    *)
+      if [[ -z "$__ARGWORK_CAPTURED" ]]
+      then
+        __argwork_error "$__ARGWORK_MESSAGE"
+      fi
+      ;;
+  esac
+
+  [[ "$__ARGWORK_IGNORE_CAPTURE" == true ]] || eval "$var='$__ARGWORK_CAPTURED'"
+}
+
+# Builds `__argwork_arg_map` dictionary where keys are names of positional or optional variables,
+# that will be used by `at` command to validate based on its expectation.
+# Argument parsing is based on the convention:
+# * first go positional arguments
+# * when the ':' in the argument is met it marks the beginning of the optional section
+__argwork_collate_args() {
+  local sector=POSITIONAL
+  local option_name=
+
+  for index in "${!__argwork_args[@]}"
+  do
+    local word="${__argwork_args[$index]}"
+
+    if [[ "${word:0-1}" == ':' ]]
+    then
+      sector=OPTIONAL
+      if [[ ! -z "$option_name" ]]; then
+        __argwork_error 'option name must be followed by its value'
+      fi
+      option_name="${word::-1}"
+    else
+      case $sector in
+        OPTIONAL)
+          if [[ -z "$option_name" ]]; then
+            __argwork_error "no option name preceedeing its value [$word]"
+          fi
+          __argwork_arg_map["$option_name"]="$word"
+          option_name=
+          ;;
+        POSITIONAL)
+          __argwork_arg_map["$(($index + 1))"]="$word"
+          ;;
+      esac
+    fi
+  done
+}
+
+__argwork_script_name_to_path() {
+  IFS='/' read -r -a __script_name_sections <<< "$1"
+  local section_array=("${__script_name_sections[@]/#/_ }")
+  printf '/%s' "${section_array[@]}"
+}
+
+
+# High-level interface
+at() {
+  __argwork_one "$@";
+}
+
+[[ -z "$ARGWORK_CLI_DIR" ]] && __argwork_error 'ARGWORK_CLI_DIR environment variable not specified'
+
+
+__ARGWORK_SCRIPT_NAME="$1"
+shift 1
+
+__argwork_args=($@)
+
+declare -A __argwork_arg_map
+
+__argwork_collate_args
+
+# Include script that may contain customizations, functions, settings
+ARGWORK_GLOBAL_ENV_PATH="$ARGWORK_CLI_DIR/.env.sh"
+[[ -f "$ARGWORK_GLOBAL_ENV_PATH" ]] && . "$ARGWORK_GLOBAL_ENV_PATH"
+
+# Include the actual runnable script lib functions (e.g. assert) can be invoked inside run script
+__ARGWORK_SCRIPT_REL_PATH="$(__argwork_script_name_to_path "$__ARGWORK_SCRIPT_NAME")"
+__ARGWORK_SCRIPT_ABS_PATH="$ARGWORK_CLI_DIR/${__ARGWORK_SCRIPT_REL_PATH}.sh"
+[[ -f "$__ARGWORK_SCRIPT_ABS_PATH" ]] && . "$__ARGWORK_SCRIPT_ABS_PATH" || __argwork_error 'command not found'
+
+# Check if main function is defined
+[[ $(type -t main) != function ]] && __argwork_error 'main function not found'
+
+main
