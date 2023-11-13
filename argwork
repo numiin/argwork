@@ -112,6 +112,14 @@ __argwork_capture_integer() {
   fi
 }
 
+__argwork_capture_file_path() {
+  __ARGWORK_CAPTURED="$1"
+}
+
+__argwork_capture_dir_path() {
+  __ARGWORK_CAPTURED="$1"
+}
+
 __argwork_capture_any() {
   __ARGWORK_CAPTURED="$1"
 }
@@ -176,6 +184,12 @@ __argwork_one() {
       ;;
     integer)
       __argwork_capture_integer "$val"
+      ;;
+    file)
+      __argwork_capture_file_path "$val"
+      ;;
+    dir)
+      __argwork_capture_dir_path "$val"
       ;;
     _)
       __argwork_capture_any "$val"

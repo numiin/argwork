@@ -47,6 +47,9 @@ at  <index>  <name>  uuid
 at  <index>  <name>  date
 at  <index>  <name>  integer
 
+at  <index>  <name>  file
+at  <index>  <name>  dir
+
 at  <index>  <name>  from     path/to/source
 at  <index>  <name>  opts     <option #1> {... <option #N>}
 at  <index>  <name>  command  <command> <arg 1> ...

@@ -68,6 +68,14 @@ __argwork_one() {
       __ARGWORK_LOOKUP_TYPES["$index"]='integer'
       __ARGWORK_LOOKUP_VALUES["$index"]='[INTEGER]'
       ;;
+    dir)
+      __ARGWORK_LOOKUP_TYPES["$index"]='dir'
+      __ARGWORK_LOOKUP_VALUES["$index"]='[/path/do/directory]'
+      ;;
+    file)
+      __ARGWORK_LOOKUP_TYPES["$index"]='file'
+      __ARGWORK_LOOKUP_VALUES["$index"]='[/path/do/file]'
+      ;;
     _)
       __ARGWORK_LOOKUP_TYPES["$index"]='_'
       __ARGWORK_LOOKUP_VALUES["$index"]=
@@ -83,8 +91,9 @@ __argwork_one() {
 }
 
 __argwork_script_name_to_path() {
-  IFS='/' read -r -a __script_name_sections <<< "$1"
-  local section_array=("${__script_name_sections[@]/#/_ }")
+  IFS=' '
+  local script_name_sections=($(echo "$1" | tr '/' ' '))
+  local section_array=("${script_name_sections[@]/#/_ }")
   printf '/%s' "${section_array[@]}"
 }
 
@@ -148,6 +157,12 @@ __argwork_complete() {
       ;;
     uuid | date | text | integer)
       IFS=$'\n' COMPREPLY=($(compgen -W "${__ARGWORK_LOOKUP_VALUES[$key]}" -- "${COMP_WORDS[$word_index]}"))
+      ;;
+    dir)
+      COMPREPLY=( $(compgen -d -- "${COMP_WORDS[$word_index]}") )
+      ;;
+    file)
+      COMPREPLY=( $(compgen -f -- "${COMP_WORDS[$word_index]}") )
       ;;
     _)
       IFS=$'\n' COMPREPLY=($(compgen -W '_' -- "${COMP_WORDS[$word_index]}"))
@@ -248,7 +263,7 @@ _argwork_completion() {
 
   __ARGWORK_SCRIPT_PATH="$(__argwork_script_name_to_path "${COMP_WORDS[1]}")"
 
-  if [ "${COMP_CWORD}" -gt 1 ] && [ ! -f "$ARGWORK_CLI_DIR/${__ARGWORK_SCRIPT_PATH}.sh" ]
+  if [ "$COMP_CWORD" -gt 1 ] && [ ! -f "$ARGWORK_CLI_DIR/${__ARGWORK_SCRIPT_PATH}.sh" ]
   then
     COMPREPLY=('' '')
     return
