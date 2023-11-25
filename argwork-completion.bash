@@ -134,36 +134,55 @@ __argwork_complete() {
 
   case "${__ARGWORK_LOOKUP_TYPES[$key]}" in
     from)
+
       if [[ -f "${ARGWORK_CLI_DIR}/.opts/${__ARGWORK_LOOKUP_VALUES[$key]}" ]]; then
         IFS=$'\n' COMPREPLY=($(compgen -W "$(cat "${ARGWORK_CLI_DIR}/.opts/${__ARGWORK_LOOKUP_VALUES[$key]}")" -- "${COMP_WORDS[$word_index]}"))
       fi
       ;;
     opts)
+
       split_into_lines="$(echo "${__ARGWORK_LOOKUP_VALUES[$key]}" | sed 's/,/\n/g')"
       IFS=$'\n' opts_split=($(echo "$split_into_lines"))
 
       IFS=$'\n' COMPREPLY=($(compgen -W "$(printf "%s\n" "${opts_split[@]}")" -- "${COMP_WORDS[$word_index]}"))
       ;;
+
     shell)
       shell_code="${__ARGWORK_LOOKUP_VALUES[$key]}"
       IFS=$'\n' COMPREPLY=($(compgen -W "$(printf "%s\n" "$(eval "$shell_code")")" -- "${COMP_WORDS[$word_index]}"))
       ;;
+
     command)
-      IFS=' ' command_line="${__ARGWORK_LOOKUP_VALUES[$key]} ${__argwork_command_args[@]}"
+      local command_name="${__ARGWORK_LOOKUP_VALUES[$key]}"
+      local command_path
+      if [[ -x "$ARGWORK_CLI_DIR/.bin/$command_name" ]]
+      then
+        command_path="$ARGWORK_CLI_DIR/.bin/$command_name"
+      else
+        command_path="$command_name"
+      fi
+      local command_line
+      IFS= command_line="$command_path ${__argwork_command_args[@]}"
       IFS=$'\n' COMPREPLY=($(compgen -W "$(printf "%s\n" "$(eval "$command_line")")" -- "${COMP_WORDS[$word_index]}"))
       ;;
+
     uuid | date | text | integer)
       IFS=$'\n' COMPREPLY=($(compgen -W "${__ARGWORK_LOOKUP_VALUES[$key]}" -- "${COMP_WORDS[$word_index]}"))
       ;;
+
     dir)
       COMPREPLY=( $(compgen -d -- "${COMP_WORDS[$word_index]}") )
       ;;
+
     file)
       COMPREPLY=( $(compgen -f -- "${COMP_WORDS[$word_index]}") )
       ;;
+
     _)
+
       IFS=$'\n' COMPREPLY=($(compgen -W '_' -- "${COMP_WORDS[$word_index]}"))
       ;;
+
     *)
       ;;
   esac

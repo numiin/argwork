@@ -185,17 +185,29 @@ argwork "$@"
 
 ### Command stack framework
 
-_Stack base_ is defined by `ARGWORK_CLI_DIR` environment variable and tells the runner and completion where to lookup the assets:
-* `.env.sh` - contains a script that will be included before each _quasi command_ (i.e. global configuration)
-* Files whose content will be used for sourcing `from` parameter specification
+_Stack base_ directory is defined by `ARGWORK_CLI_DIR` environment variable and tells the runner and completion where to lookup the assets.
+Establishing _Stack base_ is required for making _quasi commands_ discoverable inside subdirectories to form user-friendly path to the actual command, e.g.:
+```
+run path/to/command argument
+```
 
-Also, establishing a _Stack base_ is required for making _quasi commands_ discoverable inside sub-directories.
+#### Assets
+Assets are automatically discoverable in places where assets are expected.
+
+Directories:
+
+* `.bin` contains executable assets are made discoverable for `cmd` (same as `command`) without being on `PATH`
+* `.opts` contains asset files whose content will be used for sourcing `from` parameter specification
+
+Files:
+* `.env.sh` - contains a script that will be included before each _quasi command_ (i.e. global configuration)
+
 
 When you have a _quasi command_ and have a need for either `.env.sh` configuration or `from` parameter (i.e. sourcing possible argument values from a file) then you must have defined a root directory for performing the respective file lookup.
 
 ### Naming convention
 * File with names `<name><SPACE>.sh` will be interpreted as _quasi command_.
-* Any sub-directory will be used to structure a path to a _quasi command_ and will be separated by `/` when building a command.
+* Any subdirectory will be used to structure a path to a _quasi command_ and will be separated by `/` when building a command.
 
 Names are case sensitive due to originating in a physical file system.
 
@@ -203,7 +215,7 @@ Names are case sensitive due to originating in a physical file system.
 An example of a _Stack base_ that would model a database access tool set:
 
 ```
-.env.sh
+.bin
 .opts
 cassandra
   |
@@ -216,6 +228,7 @@ postgres
   |
     shell .sh
 keyspaces
+.env.sh
 ```
 
 After implementing `unload.sh` accordingly, you can export data from _Cassandra_ database by running the following command. It will be provided with completion for `keyspace` and `format` and will check the correctness of `table_name` format when actually run on command line:

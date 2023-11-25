@@ -50,7 +50,15 @@ __argwork_capture_match_shell() {
 }
 
 __argwork_capture_match_command() {
-  if $(eval "$2 ${__argwork_arg_list[@]}" | grep -q "^$1\$")
+  local command_name="$2"
+  local command_path
+  if [[ -x "$ARGWORK_CLI_DIR/.bin/$command_name" ]]
+  then
+    command_path="$ARGWORK_CLI_DIR/.bin/$command_name"
+  else
+    command_path="$command_name"
+  fi
+  if $(eval "$command_path ${__argwork_arg_list[@]}" | grep -q "^\s*$1\s*\$")
   then
     __ARGWORK_CAPTURED="$1"
   else
