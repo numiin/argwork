@@ -91,10 +91,7 @@ __argwork_one() {
 }
 
 __argwork_script_name_to_path() {
-  IFS=' '
-  local script_name_sections=($(echo "$1" | tr '/' ' '))
-  local section_array=("${script_name_sections[@]/#/_ }")
-  printf '/%s' "${section_array[@]}"
+  echo "$1"
 }
 
 __argwork_complete() {
@@ -137,8 +134,8 @@ __argwork_complete() {
 
   case "${__ARGWORK_LOOKUP_TYPES[$key]}" in
     from)
-      if [[ -f "${ARGWORK_CLI_DIR}/${__ARGWORK_LOOKUP_VALUES[$key]}" ]]; then
-        IFS=$'\n' COMPREPLY=($(compgen -W "$(cat "${ARGWORK_CLI_DIR}/${__ARGWORK_LOOKUP_VALUES[$key]}")" -- "${COMP_WORDS[$word_index]}"))
+      if [[ -f "${ARGWORK_CLI_DIR}/.opts/${__ARGWORK_LOOKUP_VALUES[$key]}" ]]; then
+        IFS=$'\n' COMPREPLY=($(compgen -W "$(cat "${ARGWORK_CLI_DIR}/.opts/${__ARGWORK_LOOKUP_VALUES[$key]}")" -- "${COMP_WORDS[$word_index]}"))
       fi
       ;;
     opts)
@@ -261,9 +258,10 @@ _argwork_completion() {
   __ARGWORK_POSITIONAL_ARG_VARS[0]=
   __ARGWORK_CURRENT_VALS[0]=
 
-  __ARGWORK_SCRIPT_PATH="$(__argwork_script_name_to_path "${COMP_WORDS[1]}")"
+  local argwork_script_path="$(__argwork_script_name_to_path "${COMP_WORDS[1]}")"
+  local argwork_abs_script_path="$ARGWORK_CLI_DIR/${argwork_script_path} .sh"
 
-  if [ "$COMP_CWORD" -gt 1 ] && [ ! -f "$ARGWORK_CLI_DIR/${__ARGWORK_SCRIPT_PATH}.sh" ]
+  if [ "$COMP_CWORD" -gt 1 ] && [ ! -f "$argwork_abs_script_path" ]
   then
     COMPREPLY=('' '')
     return
@@ -272,7 +270,7 @@ _argwork_completion() {
   if [[ "${COMP_WORDS[$COMP_CWORD]}" == '?' ]]
   then
     # Include the actual runnable script
-    . "$ARGWORK_CLI_DIR/${__ARGWORK_SCRIPT_PATH}.sh"
+    . "$argwork_abs_script_path"
 
     __argwork_complete_help
     return
@@ -280,7 +278,7 @@ _argwork_completion() {
   elif [[ "${COMP_WORDS[$COMP_CWORD]}" == '??' && $COMP_TYPE == 63 ]]
   then
     # Include the actual runnable script
-    . "$ARGWORK_CLI_DIR/${__ARGWORK_SCRIPT_PATH}.sh"
+    . "$argwork_abs_script_path"
 
     __argwork_complete_inspect
     return
@@ -289,24 +287,23 @@ _argwork_completion() {
   then
     # The first section is completed with script names at the ARGWORK_CLI_DIR
     # Start the script file name with a prefix '_ ' to make it available
-    # Sub-directories are supported and must start with the prefix as well
     local IFS=$'\n'
     local word="${COMP_WORDS[1]}"
     local script_sub_rel="${word%/*}"
     [[ "$word" != *'/'* ]] && script_sub_rel=
     local script_sub_name="${word##*/}"
-    local script_sub_rel_dir="$(__argwork_script_name_to_path "${script_sub_rel}")"
+    local script_sub_rel_dir="$(__argwork_script_name_to_path "$script_sub_rel")"
     local script_sub_abs_dir="$script_sub_rel_dir"
-    local script_dir="${ARGWORK_CLI_DIR}${script_sub_abs_dir}"
+    local script_dir="${ARGWORK_CLI_DIR}/${script_sub_abs_dir}"
 
-    COMPREPLY=($(compgen -W "$(find "$script_dir" -mindepth 1 -maxdepth 1 -type f -name "_ ${script_sub_name}*" -printf "${script_sub_rel:+$script_sub_rel/}%f\n" -o -type d -name "_ ${script_sub_name}*" -printf "${script_sub_rel:+$script_sub_rel/}%f/\n" | sed 's/^_ //g; s/\/_ /\//g; s/.sh$//g'| sort)" -- "$word")) && compopt -o filenames
+    COMPREPLY=($(compgen -W "$(find "$script_dir" -mindepth 1 -maxdepth 1 -not -name '.*' -type f -name "${script_sub_name}* .sh" -printf "${script_sub_rel:+$script_sub_rel/}%f\n" -o -not -name '.*' -type d -name "${script_sub_name}*" -printf "${script_sub_rel:+$script_sub_rel/}%f/\n" | sed 's/ .sh$//g'| sort)" -- "$word")) && compopt -o filenames
     [[ $COMPREPLY == */ ]] && compopt -o nospace
     return
 
   elif [ "${COMP_CWORD}" -gt 1 ]
   then
       # Include the actual runnable script
-      . "$ARGWORK_CLI_DIR/${__ARGWORK_SCRIPT_PATH}.sh"
+      . "$argwork_abs_script_path"
 
       __argwork_complete
     return
@@ -314,7 +311,7 @@ _argwork_completion() {
 }
 
 # Wire up a custom command autocompletion in .bashrc:
-# complete -o nosort -F _argwork_completion <command>
+# complete -o nosort -F _argwork_completion <command
 
 
 # High level interface

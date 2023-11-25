@@ -6,7 +6,7 @@
 ## How it works
 
 In a prepared _Stack_ create a new _quasi command_:
-1. Put `_ <name>.sh` in any subdirectory of the stack root.
+1. Put `<name><SPACE>.sh` in any subdirectory of the stack root.
 2. Specify command inputs by defining your command domain.
 3. Put your action inside `main()`.
 
@@ -189,15 +189,13 @@ _Stack base_ is defined by `ARGWORK_CLI_DIR` environment variable and tells the 
 * `.env.sh` - contains a script that will be included before each _quasi command_ (i.e. global configuration)
 * Files whose content will be used for sourcing `from` parameter specification
 
-Also, _Stack base_ is required for making _quasi commands_ discoverable inside sub-directories (with names starting in `_ `).
+Also, establishing a _Stack base_ is required for making _quasi commands_ discoverable inside sub-directories.
 
 When you have a _quasi command_ and have a need for either `.env.sh` configuration or `from` parameter (i.e. sourcing possible argument values from a file) then you must have defined a root directory for performing the respective file lookup.
 
 ### Naming convention
-* File with names `_ <name>.sh` will be interpreted as _quasi command_.
-* Directory with name `_ <name>` will be used to structure a path to a _quasi command_ and will be separated by `/` when building a command.
-
-The space after `_` is required.
+* File with names `<name><SPACE>.sh` will be interpreted as _quasi command_.
+* Any sub-directory will be used to structure a path to a _quasi command_ and will be separated by `/` when building a command.
 
 Names are case sensitive due to originating in a physical file system.
 
@@ -206,16 +204,17 @@ An example of a _Stack base_ that would model a database access tool set:
 
 ```
 .env.sh
-_ cassandra
+.opts
+cassandra
   |
-    _ shell.sh
-    _ dsbulk
+    shell .sh
+    dsbulk
       |
-        _ load.sh
-        _ unload.sh
-_ postgres
+        load .sh
+        unload .sh
+postgres
   |
-    _ shell.sh
+    shell .sh
 keyspaces
 ```
 
@@ -225,7 +224,7 @@ After implementing `unload.sh` accordingly, you can export data from _Cassandra_
 run cassandra/dsbulk/unload table_name  format: csv
 ```
 
-Note how `_ cassandra`/`_ dsbulk`/`_ unload.sh` physical path is expected in a more readable form `cassandra/dsbulk/unload`.
+Note how `cassandra`/`dsbulk`/`unload .sh` physical path (relative to _Stack base_) is expected in a more readable form `cassandra/dsbulk/unload`.
 
 Example of `unload.sh`:
 
@@ -246,4 +245,20 @@ main() {
 ```
 apples
 oranges
+```
+
+Usage examples:
+
+```
+$ run cassandra/dsbult/unload oranges supplier format: json
+$ run cassandra/dsbult/unload apples seller format: csv
+$ run cassandra/dsbult/unload apples farming
+```
+
+```
+$ run cassandra/dsbult/unload pears supplier
+==> value [pears] is not at [keyspaces]
+
+$ run cassandra/dsbult/unload oranges seller format: text
+==> value [text] is not in [csv json]
 ```

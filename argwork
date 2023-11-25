@@ -2,6 +2,8 @@
 
 set -e
 
+ARGWORK_DIR_PREFIX=
+
 __argwork_message() {
   local message="$1"
   if [ -t 1 ]
@@ -18,7 +20,7 @@ __argwork_error() {
 }
 
 __argwork_capture_match_file() {
-  if $(cat "$ARGWORK_CLI_DIR/$2" | grep -q "^$1\$")
+  if $(cat "$ARGWORK_CLI_DIR/.opts/$2" | grep -q "^$1\$")
   then
     __ARGWORK_CAPTURED="$1"
   else
@@ -262,9 +264,7 @@ __argwork_collate_args() {
 }
 
 __argwork_script_name_to_path() {
-  IFS='/' read -r -a __script_name_sections <<< "$1"
-  local section_array=("${__script_name_sections[@]/#/_ }")
-  printf '/%s' "${section_array[@]}"
+  echo "$1"
 }
 
 
@@ -291,8 +291,8 @@ ARGWORK_GLOBAL_ENV_PATH="$ARGWORK_CLI_DIR/.env.sh"
 
 # Include the actual runnable script lib functions (e.g. assert) can be invoked inside run script
 __ARGWORK_SCRIPT_REL_PATH="$(__argwork_script_name_to_path "$__ARGWORK_SCRIPT_NAME")"
-__ARGWORK_SCRIPT_ABS_PATH="$ARGWORK_CLI_DIR/${__ARGWORK_SCRIPT_REL_PATH}.sh"
-[[ -f "$__ARGWORK_SCRIPT_ABS_PATH" ]] && . "$__ARGWORK_SCRIPT_ABS_PATH" || __argwork_error 'command not found'
+__ARGWORK_SCRIPT_ABS_PATH="$ARGWORK_CLI_DIR/${__ARGWORK_SCRIPT_REL_PATH} .sh"
+[[ -f "$__ARGWORK_SCRIPT_ABS_PATH" ]] && . "$__ARGWORK_SCRIPT_ABS_PATH" || __argwork_error "command [$__ARGWORK_SCRIPT_ABS_PATH] not found"
 
 # Check if main function is defined
 [[ $(type -t main) != function ]] && __argwork_error 'main function not found'
