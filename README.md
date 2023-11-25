@@ -52,7 +52,7 @@ at  <index>  <name>  dir
 
 at  <index>  <name>  from     path/to/source
 at  <index>  <name>  opts     <option #1> {... <option #N>}
-at  <index>  <name>  command  <command> <arg 1> ...
+at  <index>  <name>  command  <command | cmd> {arg 1} {arg 2} ...
 at  <index>  <name>  shell    <shell script>
 
 at  <index>  <name>  ...      # Dynamic continuation marker

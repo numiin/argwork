@@ -35,18 +35,18 @@ __argwork_one() {
       __ARGWORK_LOOKUP_VALUES["$index"]="$4"
       ;;
     opts)
-      local _arg_list=(${@:4})
+      local arg_list=(${@:4})
       __ARGWORK_LOOKUP_TYPES["$index"]='opts'
-      __ARGWORK_LOOKUP_VALUES["$index"]=$(IFS=, ; echo "${_arg_list[*]}")
+      __ARGWORK_LOOKUP_VALUES["$index"]=$(IFS=, ; echo "${arg_list[*]}")
       ;;
     shell)
-      RUN_SHELL_ARGS=(${COMP_WORDS[@]:1})
       __ARGWORK_LOOKUP_TYPES["$index"]='shell'
       __ARGWORK_LOOKUP_VALUES["$index"]="$4"
       ;;
-    command)
+    command|cmd)
       __ARGWORK_LOOKUP_TYPES["$index"]='command'
       __ARGWORK_LOOKUP_VALUES["$index"]="$4"
+      __argwork_command_args=(${@:5})
       ;;
     uuid)
       __ARGWORK_LOOKUP_TYPES["$index"]='uuid'
@@ -152,7 +152,7 @@ __argwork_complete() {
       IFS=$'\n' COMPREPLY=($(compgen -W "$(printf "%s\n" "$(eval "$shell_code")")" -- "${COMP_WORDS[$word_index]}"))
       ;;
     command)
-      IFS=' ' command_line="${__ARGWORK_LOOKUP_VALUES[$key]} ${COMP_WORDS[*]:2}"
+      IFS=' ' command_line="${__ARGWORK_LOOKUP_VALUES[$key]} ${__argwork_command_args[@]}"
       IFS=$'\n' COMPREPLY=($(compgen -W "$(printf "%s\n" "$(eval "$command_line")")" -- "${COMP_WORDS[$word_index]}"))
       ;;
     uuid | date | text | integer)
@@ -314,7 +314,7 @@ _argwork_completion() {
 }
 
 # Wire up a custom command autocompletion in .bashrc:
-# complete -o nosort -F _argwork_completion <command
+# complete -o nosort -F _argwork_completion <command>
 
 
 # High level interface

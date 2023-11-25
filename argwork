@@ -166,8 +166,8 @@ __argwork_one() {
     shell)
       __argwork_capture_match_shell "$val" "$4"
       ;;
-    command)
-      __argwork_arg_list=()
+    command|cmd)
+      __argwork_arg_list=(${@:5})
       __argwork_capture_match_command "$val" "$4"
       ;;
     uuid)
