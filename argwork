@@ -136,9 +136,9 @@ __argwork_capture_any() {
 
 __argwork_one() {
   local index="$1"
-  local val=
   local var="$2"
   local type="$3"
+  local val=
 
   # '_' in variable name is a bypass marker
   [[ "$var" == '_' ]] && return 0
@@ -165,47 +165,63 @@ __argwork_one() {
   __ARGWORK_MESSAGE=
   __ARGWORK_IGNORE_CAPTURE=false
 
+  shift 3
+
   case "$type" in
-    from)
-      __argwork_capture_match_file "$val" "$4"
-      ;;
     opts)
-      __argwork_arg_list=(${@:4})
-      __argwork_capture_match_values "$val"
+      local spec="$1"; shift
+      case "$spec" in
+        from)
+          __argwork_capture_match_file "$val" "$1"
+          ;;
+        here)
+          __argwork_arg_list=(${@:1})
+          __argwork_capture_match_values "$val"
+          ;;
+        shell)
+          __argwork_capture_match_shell "$val" "$1"
+          ;;
+        cmd)
+          __argwork_arg_list=(${@:2})
+          __argwork_capture_match_command "$val" "$1"
+          ;;
+        file)
+          __argwork_capture_file_path "$val"
+          ;;
+        dir)
+          __argwork_capture_dir_path "$val"
+          ;;
+      esac
       ;;
-    shell)
-      __argwork_capture_match_shell "$val" "$4"
+
+    test)
+      local spec="$1"; shift
+      case "$spec" in
+        uuid)
+          __argwork_capture_uuid "$val"
+          ;;
+        date)
+          __argwork_capture_date "$val"
+          ;;
+        text)
+          __argwork_capture_text "$val" "$1" "$2" "$3"
+          ;;
+        regex)
+          __argwork_capture_regex "$val" "$1"
+          ;;
+        integer)
+          __argwork_capture_integer "$val"
+          ;;
+      esac
       ;;
-    command|cmd)
-      __argwork_arg_list=(${@:5})
-      __argwork_capture_match_command "$val" "$4"
-      ;;
-    uuid)
-      __argwork_capture_uuid "$val"
-      ;;
-    date)
-      __argwork_capture_date "$val"
-      ;;
-    text)
-      __argwork_capture_text "$val" "$4" "$5" "$6"
-      ;;
-    regex)
-      __argwork_capture_regex "$val" "$4"
-      ;;
-    integer)
-      __argwork_capture_integer "$val"
-      ;;
-    file)
-      __argwork_capture_file_path "$val"
-      ;;
-    dir)
-      __argwork_capture_dir_path "$val"
-      ;;
+
     _)
       __argwork_capture_any "$val"
       ;;
+
     ...)
       ;;
+
     *)
       __argwork_error "unknown type [$type]"
       ;;
@@ -258,7 +274,7 @@ __argwork_collate_args() {
       case $sector in
         OPTIONAL)
           if [[ -z "$option_name" ]]; then
-            __argwork_error "no option name preceedeing its value [$word]"
+            __argwork_error "no option name preceeding its value [$word]"
           fi
           __argwork_arg_map["$option_name"]="$word"
           option_name=
@@ -284,7 +300,7 @@ at() {
 [[ -z "$ARGWORK_CLI_DIR" ]] && __argwork_error 'ARGWORK_CLI_DIR environment variable not specified'
 
 
-__ARGWORK_SCRIPT_NAME="$1"
+__argwork_script_name="$1"
 shift 1
 
 __argwork_args=($@)
@@ -294,13 +310,13 @@ declare -A __argwork_arg_map
 __argwork_collate_args
 
 # Include script that may contain customizations, functions, settings
-ARGWORK_GLOBAL_ENV_PATH="$ARGWORK_CLI_DIR/.env.sh"
-[[ -f "$ARGWORK_GLOBAL_ENV_PATH" ]] && . "$ARGWORK_GLOBAL_ENV_PATH"
+__argwork_global_env_path="$ARGWORK_CLI_DIR/.env.sh"
+[[ -f "$__argwork_global_env_path" ]] && . "$__argwork_global_env_path"
 
 # Include the actual runnable script lib functions (e.g. assert) can be invoked inside run script
-__ARGWORK_SCRIPT_REL_PATH="$(__argwork_script_name_to_path "$__ARGWORK_SCRIPT_NAME")"
-__ARGWORK_SCRIPT_ABS_PATH="$ARGWORK_CLI_DIR/${__ARGWORK_SCRIPT_REL_PATH} .sh"
-[[ -f "$__ARGWORK_SCRIPT_ABS_PATH" ]] && . "$__ARGWORK_SCRIPT_ABS_PATH" || __argwork_error "command [$__ARGWORK_SCRIPT_ABS_PATH] not found"
+__argwork_script_rel_path="$(__argwork_script_name_to_path "$__argwork_script_name")"
+__argwork_script_abs_path="$ARGWORK_CLI_DIR/${__argwork_script_rel_path} .sh"
+[[ -f "$__argwork_script_abs_path" ]] && . "$__argwork_script_abs_path" || __argwork_error "command [$__argwork_script_abs_path] not found"
 
 # Check if main function is defined
 [[ $(type -t main) != function ]] && __argwork_error 'main function not found'

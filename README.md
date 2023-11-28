@@ -41,19 +41,18 @@ That is why the actual command code is put into `main()` function, i.e. to prote
 ```bash
 at  <index>  <name>  _       # Matches any input
 
-at  <index>  <name>  text     {eq | lt | gt | le | ge} <number>
-at  <index>  <name>  regex    <pattern>
-at  <index>  <name>  uuid
-at  <index>  <name>  date
-at  <index>  <name>  integer
+at  <index>  <name>  test text     {eq | lt | gt | le | ge} <number>
+at  <index>  <name>  test regex    <pattern>
+at  <index>  <name>  test uuid
+at  <index>  <name>  test date
+at  <index>  <name>  test integer
 
-at  <index>  <name>  file
-at  <index>  <name>  dir
-
-at  <index>  <name>  from     path/to/source
-at  <index>  <name>  opts     <option #1> {... <option #N>}
-at  <index>  <name>  command  <command | cmd> {arg 1} {arg 2} ...
-at  <index>  <name>  shell    <shell script>
+at  <index>  <name>  opts from   path/to/source
+at  <index>  <name>  opts here   <option #1> {... <option #N>}
+at  <index>  <name>  opts cmd    <command> {arg 1} {arg 2} ...
+at  <index>  <name>  opts shell  <shell script>
+at  <index>  <name>  opts file
+at  <index>  <name>  opts dir
 
 at  <index>  <name>  ...      # Dynamic continuation marker
 ```
@@ -71,8 +70,8 @@ Those are positional in traditional understanding. There must be no gaps in numb
 Those can be omitted, or specified only once, e.g.:
 
 ```bash
-at  1  level   opts  WARN DEBUG
-at  _  target  opts  alpha beta other
+at  1  level   opts here  WARN DEBUG
+at  _  target  opts here  alpha beta other
 ```
 
 It is possible to have a _quasi command_ with no positional **or** no optional parameters.
@@ -124,9 +123,9 @@ source ~/.config/argwork/bash-completion.sh
 
 Example _quasi command_ `random` in `draw` stack:
 ```bash
-at 1 color   opts  red green yellow
-at 2 fruit   opts  papaya mango jackfruit durian
-at _ rating  integer
+at 1 color   opts here  red green yellow
+at 2 fruit   opts here  papaya mango jackfruit durian
+at _ rating  test integer
 
 main () {
   echo "$color $fruit is rated ${rating:-friendly}"
@@ -244,9 +243,9 @@ Example of `unload.sh`:
 ```bash
 #!/bin/bash
 
-at 1  keyspace    from   keyspaces
-at 2  table_name  regex  '^[a-zA-Z0-9_]*$'
-at _  format      opts   csv json
+at 1  keyspace    opts from   keyspaces
+at 2  table_name  test regex  '^[a-zA-Z0-9_]*$'
+at _  format      opts here   csv json
 
 main() {
   dsbulk unload -k "$keyspace" -t "$table_name" > "$table_name.${format:-csv}"

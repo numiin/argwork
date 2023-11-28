@@ -12,78 +12,94 @@ __argwork_one() {
   # update index
   case "$index" in
     _)
-      if [[ ! -v __ARGWORK_OPTIONAL_ARG_VARS[$var] ]]
+      if [[ ! -v __argwork_optional_arg_vars[$var] ]]
       then
-        __ARGWORK_OPTIONAL_PARAM_COUNT=$(($__ARGWORK_OPTIONAL_PARAM_COUNT + 1))
-        __ARGWORK_OPTIONAL_ARG_VARS["$var"]="$var"
+        __argwork_optional_param_count=$(($__argwork_optional_param_count + 1))
+        __argwork_optional_arg_vars["$var"]="$var"
       fi
       ;;
     *)
-      if (($__ARGWORK_POSITIONAL_PARAM_COUNT < $index))
+      if (($__argwork_positional_param_count < $index))
       then
-        __ARGWORK_POSITIONAL_PARAM_COUNT=$index
+        __argwork_positional_param_count=$index
       fi
-      __ARGWORK_POSITIONAL_ARG_VARS[$index]="$var"
+      __argwork_positional_arg_vars[$index]="$var"
       ;;
   esac
 
   if [[ "$index" == '_' ]]; then index="$var"; fi
 
+  shift 3
+
   case "$type" in
-    from)
-      __ARGWORK_LOOKUP_TYPES["$index"]='from'
-      __ARGWORK_LOOKUP_VALUES["$index"]="$4"
-      ;;
     opts)
-      local arg_list=(${@:4})
-      __ARGWORK_LOOKUP_TYPES["$index"]='opts'
-      __ARGWORK_LOOKUP_VALUES["$index"]=$(IFS=, ; echo "${arg_list[*]}")
+      local spec="$1"; shift
+      case "$spec" in
+        from)
+          __argwork_lookup_types["$index"]='from'
+          __argwork_lookup_values["$index"]="$1"
+          ;;
+        here)
+          local arg_list=(${@:1})
+          __argwork_lookup_types["$index"]='opts'
+          __argwork_lookup_values["$index"]=$(IFS=, ; echo "${arg_list[*]}")
+          ;;
+        shell)
+          __argwork_lookup_types["$index"]='shell'
+          __argwork_lookup_values["$index"]="$1"
+          ;;
+        cmd)
+          __argwork_lookup_types["$index"]='command'
+          __argwork_lookup_values["$index"]="$1"
+          __argwork_command_args=(${@:2})
+          ;;
+        dir)
+          __argwork_lookup_types["$index"]='dir'
+          __argwork_lookup_values["$index"]='[/path/do/directory]'
+          ;;
+        file)
+          __argwork_lookup_types["$index"]='file'
+          __argwork_lookup_values["$index"]='[/path/do/file]'
+          ;;
+      esac
       ;;
-    shell)
-      __ARGWORK_LOOKUP_TYPES["$index"]='shell'
-      __ARGWORK_LOOKUP_VALUES["$index"]="$4"
+
+    test)
+      local spec="$1"; shift
+      case "$spec" in
+        uuid)
+          __argwork_lookup_types["$index"]='uuid'
+          __argwork_lookup_values["$index"]="[UUID]"
+          ;;
+        date)
+          __argwork_lookup_types["$index"]='date'
+          __argwork_lookup_values["$index"]='[YYYY-MM-DD]'
+          ;;
+        text)
+          __argwork_lookup_types["$index"]='text'
+          __argwork_lookup_values["$index"]='[TEXT]'
+          ;;
+        regex)
+          __argwork_lookup_types["$index"]='regex'
+          __argwork_lookup_values["$index"]='[REGEX]'
+          ;;
+        integer)
+          __argwork_lookup_types["$index"]='integer'
+          __argwork_lookup_values["$index"]='[INTEGER]'
+          ;;
+      esac
       ;;
-    command|cmd)
-      __ARGWORK_LOOKUP_TYPES["$index"]='command'
-      __ARGWORK_LOOKUP_VALUES["$index"]="$4"
-      __argwork_command_args=(${@:5})
-      ;;
-    uuid)
-      __ARGWORK_LOOKUP_TYPES["$index"]='uuid'
-      __ARGWORK_LOOKUP_VALUES["$index"]="[UUID]"
-      ;;
-    date)
-      __ARGWORK_LOOKUP_TYPES["$index"]='date'
-      __ARGWORK_LOOKUP_VALUES["$index"]='[YYYY-MM-DD]'
-      ;;
-    text)
-      __ARGWORK_LOOKUP_TYPES["$index"]='text'
-      __ARGWORK_LOOKUP_VALUES["$index"]='[TEXT]'
-      ;;
-    regex)
-      __ARGWORK_LOOKUP_TYPES["$index"]='regex'
-      __ARGWORK_LOOKUP_VALUES["$index"]='[REGEX]'
-      ;;
-    integer)
-      __ARGWORK_LOOKUP_TYPES["$index"]='integer'
-      __ARGWORK_LOOKUP_VALUES["$index"]='[INTEGER]'
-      ;;
-    dir)
-      __ARGWORK_LOOKUP_TYPES["$index"]='dir'
-      __ARGWORK_LOOKUP_VALUES["$index"]='[/path/do/directory]'
-      ;;
-    file)
-      __ARGWORK_LOOKUP_TYPES["$index"]='file'
-      __ARGWORK_LOOKUP_VALUES["$index"]='[/path/do/file]'
-      ;;
+
     _)
-      __ARGWORK_LOOKUP_TYPES["$index"]='_'
-      __ARGWORK_LOOKUP_VALUES["$index"]=
+      __argwork_lookup_types["$index"]='_'
+      __argwork_lookup_values["$index"]=
       ;;
+
     ...)
-      __ARGWORK_LOOKUP_TYPES["$index"]=
-      __ARGWORK_LOOKUP_VALUES["$index"]=
+      __argwork_lookup_types["$index"]=
+      __argwork_lookup_values["$index"]=
       ;;
+
     *)
       ;;
   esac
@@ -96,17 +112,17 @@ __argwork_script_name_to_path() {
 
 __argwork_complete() {
   # Optionals consist of three parts and are specifired like <param>:<value>
-  if [[ ${COMP_CWORD} -gt $(($__ARGWORK_POSITIONAL_PARAM_COUNT + $__ARGWORK_OPTIONAL_PARAM_COUNT * 3 + 1)) ]]; then return; fi
+  if [[ $COMP_CWORD -gt $(($__argwork_positional_param_count + $__argwork_optional_param_count * 3 + 1)) ]]; then return; fi
 
   local sector=POSITIONAL
-  if (( $__ARGWORK_POSITIONAL_PARAM_COUNT > 0 && ${COMP_CWORD} > $__ARGWORK_POSITIONAL_PARAM_COUNT + 1))
+  if (( $__argwork_positional_param_count > 0 && $COMP_CWORD > $__argwork_positional_param_count + 1))
   then
     sector=OPTIONAL
   fi
 
   local key=
   local key_shift=0
-  case $sector in
+  case "$sector" in
     POSITIONAL)
       key="$(($COMP_CWORD - 1))"
       ;;
@@ -115,14 +131,14 @@ __argwork_complete() {
       then
         key="${COMP_WORDS[$(($COMP_CWORD - 1))]}"
         key_shift=1
-        if [[ -z "$key" || ! -v __ARGWORK_OPTIONAL_ARG_VARS[$key] ]]; then return; fi
+        if [[ -z "$key" || ! -v __argwork_optional_arg_vars[$key] ]]; then return; fi
       elif [[ "${COMP_WORDS[$(($COMP_CWORD - 1))]}" == ':' ]]
       then
         key="${COMP_WORDS[$(($COMP_CWORD - 2))]}"
         key_shift=0
-        if [[ -z "$key" || ! -v __ARGWORK_OPTIONAL_ARG_VARS[$key] ]]; then return; fi
+        if [[ -z "$key" || ! -v __argwork_optional_arg_vars[$key] ]]; then return; fi
       else
-        COMPREPLY=($(compgen -W "$(printf "%s\n" "${__ARGWORK_OPTIONAL_ARG_VARS[@]/%/:}")" -- "${COMP_WORDS[$COMP_CWORD]}"))
+        COMPREPLY=($(compgen -W "$(printf "%s\n" "${__argwork_optional_arg_vars[@]/%/:}")" -- "${COMP_WORDS[$COMP_CWORD]}"))
         return
       fi
       ;;
@@ -130,30 +146,29 @@ __argwork_complete() {
 
   local word_index=$(($COMP_CWORD + $key_shift))
 
-  # echo "==> DEBUG: __ARGWORK_POSITIONAL_PARAM_COUNT=$__ARGWORK_POSITIONAL_PARAM_COUNT ; __ARGWORK_OPTIONAL_PARAM_COUNT=$__ARGWORK_OPTIONAL_PARAM_COUNT ; __ARGWORK_LOOKUP_TYPES=$!__ARGWORK_LOOKUP_TYPES[@]} ; key=$key ; __ARGWORK_LOOKUP_TYPES[key]=${__ARGWORK_LOOKUP_TYPES[$key]} ; __ARGWORK_POSITIONAL_ARG_VARS=[${__ARGWORK_POSITIONAL_ARG_VARS[@]}]" >> ~/argwork-completion.bash.log
+  # echo "==> DEBUG: __argwork_positional_param_count=$__argwork_positional_param_count ; __argwork_optional_param_count=$__argwork_optional_param_count ; __argwork_lookup_types=$!__argwork_lookup_types[@]} ; key=$key ; __argwork_lookup_types[key]=${__argwork_lookup_types[$key]} ; __argwork_positional_arg_vars=[${__argwork_positional_arg_vars[@]}]" >> ~/argwork-completion.bash.log
 
-  case "${__ARGWORK_LOOKUP_TYPES[$key]}" in
+  case "${__argwork_lookup_types[$key]}" in
     from)
-
-      if [[ -f "${ARGWORK_CLI_DIR}/.opts/${__ARGWORK_LOOKUP_VALUES[$key]}" ]]; then
-        IFS=$'\n' COMPREPLY=($(compgen -W "$(cat "${ARGWORK_CLI_DIR}/.opts/${__ARGWORK_LOOKUP_VALUES[$key]}")" -- "${COMP_WORDS[$word_index]}"))
+      if [[ -f "${ARGWORK_CLI_DIR}/.opts/${__argwork_lookup_values[$key]}" ]]; then
+        IFS=$'\n' COMPREPLY=($(compgen -W "$(cat "${ARGWORK_CLI_DIR}/.opts/${__argwork_lookup_values[$key]}")" -- "${COMP_WORDS[$word_index]}"))
       fi
       ;;
-    opts)
 
-      split_into_lines="$(echo "${__ARGWORK_LOOKUP_VALUES[$key]}" | sed 's/,/\n/g')"
+    opts)
+      split_into_lines="$(echo "${__argwork_lookup_values[$key]}" | sed 's/,/\n/g')"
       IFS=$'\n' opts_split=($(echo "$split_into_lines"))
 
       IFS=$'\n' COMPREPLY=($(compgen -W "$(printf "%s\n" "${opts_split[@]}")" -- "${COMP_WORDS[$word_index]}"))
       ;;
 
     shell)
-      shell_code="${__ARGWORK_LOOKUP_VALUES[$key]}"
+      shell_code="${__argwork_lookup_values[$key]}"
       IFS=$'\n' COMPREPLY=($(compgen -W "$(printf "%s\n" "$(eval "$shell_code")")" -- "${COMP_WORDS[$word_index]}"))
       ;;
 
     command)
-      local command_name="${__ARGWORK_LOOKUP_VALUES[$key]}"
+      local command_name="${__argwork_lookup_values[$key]}"
       local command_path
       if [[ -x "$ARGWORK_CLI_DIR/.bin/$command_name" ]]
       then
@@ -167,7 +182,7 @@ __argwork_complete() {
       ;;
 
     uuid | date | text | integer)
-      IFS=$'\n' COMPREPLY=($(compgen -W "${__ARGWORK_LOOKUP_VALUES[$key]}" -- "${COMP_WORDS[$word_index]}"))
+      IFS=$'\n' COMPREPLY=($(compgen -W "${__argwork_lookup_values[$key]}" -- "${COMP_WORDS[$word_index]}"))
       ;;
 
     dir)
@@ -191,10 +206,10 @@ __argwork_complete() {
 __argwork_complete_help() {
   local help_spec=''
 
-  for key in $(seq 1 $__ARGWORK_POSITIONAL_PARAM_COUNT)
+  for key in $(seq 1 $__argwork_positional_param_count)
   do
     local spec=
-    local var_name="${__ARGWORK_POSITIONAL_ARG_VARS[$key]}"
+    local var_name="${__argwork_positional_arg_vars[$key]}"
     if [[ "$var_name" == '_' ]]; then
       spec='...'
     else
@@ -202,7 +217,7 @@ __argwork_complete_help() {
     fi
     help_spec="$help_spec  [$spec]"
   done
-  local optional_arg_spec="${__ARGWORK_OPTIONAL_ARG_VARS[@]}"
+  local optional_arg_spec="${__argwork_optional_arg_vars[@]}"
   help_spec="$help_spec  ${optional_arg_spec:+($optional_arg_spec)}"
   COMPREPLY=("usage:$help_spec" '')
 }
@@ -253,12 +268,12 @@ __argwork_complete_inspect() {
 
   printf '\nusage (current):'
 
-  for key in $(seq 1 $__ARGWORK_POSITIONAL_PARAM_COUNT)
+  for key in $(seq 1 $__argwork_positional_param_count)
   do
-    local field="${key}:${__ARGWORK_POSITIONAL_ARG_VARS[$key]}"
+    local field="${key}:${__argwork_positional_arg_vars[$key]}"
     printf '\n  %s%*s = %s' "$field" "$((20-${#field}))" '' "${arg_map[$key]}"
   done
-  for option_name in "${!__ARGWORK_OPTIONAL_ARG_VARS[@]}"
+  for option_name in "${!__argwork_optional_arg_vars[@]}"
   do
     printf '\n  %s%*s = %s' "_:$option_name" "$((18-${#option_name}))" '' "${arg_map[$option_name]}"
   done
@@ -266,16 +281,14 @@ __argwork_complete_inspect() {
 }
 
 _argwork_completion() {
-  declare -A __ARGWORK_LOOKUP_TYPES
-  declare -A __ARGWORK_LOOKUP_VALUES
-  declare -a __ARGWORK_POSITIONAL_ARG_VARS
-  declare -A __ARGWORK_OPTIONAL_ARG_VARS
-  declare -a __ARGWORK_CURRENT_VALS
+  declare -A __argwork_lookup_types
+  declare -A __argwork_lookup_values
+  declare -a __argwork_positional_arg_vars
+  declare -A __argwork_optional_arg_vars
 
-  __ARGWORK_POSITIONAL_PARAM_COUNT=0
-  __ARGWORK_OPTIONAL_PARAM_COUNT=0
-  __ARGWORK_POSITIONAL_ARG_VARS[0]=
-  __ARGWORK_CURRENT_VALS[0]=
+  __argwork_positional_param_count=0
+  __argwork_optional_param_count=0
+  __argwork_positional_arg_vars[0]=
 
   local argwork_script_path="$(__argwork_script_name_to_path "${COMP_WORDS[1]}")"
   local argwork_abs_script_path="$ARGWORK_CLI_DIR/${argwork_script_path} .sh"
@@ -330,7 +343,7 @@ _argwork_completion() {
 }
 
 # Wire up a custom command autocompletion in .bashrc:
-# complete -o nosort -F _argwork_completion <command
+# complete -o nosort -F _argwork_completion <command>
 
 
 # High level interface
