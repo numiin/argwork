@@ -343,7 +343,7 @@ _argwork_completion() {
 }
 
 # Wire up a custom command autocompletion in .bashrc:
-# complete -o nosort -F _argwork_completion <command>
+# complete -o nosort -F _argwork_completion <command
 
 
 # High level interface

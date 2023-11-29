@@ -89,6 +89,27 @@ This may be achieved by specifying `_` in place of a value:
 run WARN env: _
 ```
 
+### Argument references
+
+Use `%` as an argument when you want to reference environment variable named after the preceding argument value.
+
+Use `^` as an argument when you want to reference environment variable named after the parameter at its position.
+
+E.g.
+
+```
+at 1 action    opts here  move turn
+at 2 direction opts here  there back
+at 3 plane     opts here  horizonal vertical
+at 4 rate      opts here  fast slow moderate
+
+$ run move direction % ^
+```
+
+will use environment variable
+* `DIRECTION` value in place of `%`
+* `RATE` value in place of `^`
+
 ### Parameter ordering
 Positional arguments must immediately follow command name.
 

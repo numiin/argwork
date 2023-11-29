@@ -153,6 +153,7 @@ __argwork_one() {
       then
         __argwork_error "value [$var] must have value"
       fi
+      __argwork_var_map["$index"]="$var"
       ;;
   esac
 
@@ -160,6 +161,18 @@ __argwork_one() {
   then
     __argwork_error 'assertion must have variable name in second argument'
   fi
+
+  # Load the value from environment variable if '^'
+  case "$val" in
+    '^')
+      local env_var_name="${var^^}"
+      val="${!env_var_name}"
+      ;;
+    '%')
+      local env_var_name="${__argwork_arg_map[$(( $index - 1 ))]^^}"
+      val="${!env_var_name}"
+      ;;
+  esac
 
   __ARGWORK_CAPTURED=
   __ARGWORK_MESSAGE=
@@ -306,6 +319,7 @@ shift 1
 __argwork_args=($@)
 
 declare -A __argwork_arg_map
+declare -A __argwork_var_map
 
 __argwork_collate_args
 
