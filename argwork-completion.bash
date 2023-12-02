@@ -5,12 +5,14 @@ __argwork_one() {
   local var="$2"
   local type="$3"
 
-  if [[ "$index" != '_' && "$var" != '_' ]]; then
+  if [[ "$index" != '_' && "$index" != '-' && "$var" != '_' ]]; then
     eval "$var='${COMP_WORDS[$(($index + 1))]}'"
   fi
 
   # update index
   case "$index" in
+    -)
+      ;;
     _)
       if [[ ! -v __argwork_optional_arg_vars[$var] ]]
       then
@@ -86,6 +88,14 @@ __argwork_one() {
         integer)
           __argwork_lookup_types["$index"]='integer'
           __argwork_lookup_values["$index"]='[INTEGER]'
+          ;;
+        decimal)
+          __argwork_lookup_types["$index"]='decimal'
+          __argwork_lookup_values["$index"]='[DECIMAL]'
+          ;;
+        float)
+          __argwork_lookup_types["$index"]='float'
+          __argwork_lookup_values["$index"]='[FLOAT]'
           ;;
       esac
       ;;
@@ -181,7 +191,7 @@ __argwork_complete() {
       IFS=$'\n' COMPREPLY=($(compgen -W "$(printf "%s\n" "$(eval "$command_line")")" -- "${COMP_WORDS[$word_index]}"))
       ;;
 
-    uuid | date | text | integer)
+    uuid | date | text | integer | decimal | float)
       IFS=$'\n' COMPREPLY=($(compgen -W "${__argwork_lookup_values[$key]}" -- "${COMP_WORDS[$word_index]}"))
       ;;
 
@@ -326,7 +336,7 @@ _argwork_completion() {
     local script_sub_name="${word##*/}"
     local script_sub_rel_dir="$(__argwork_script_name_to_path "$script_sub_rel")"
     local script_sub_abs_dir="$script_sub_rel_dir"
-    local script_dir="${ARGWORK_CLI_DIR}/${script_sub_abs_dir}"
+    local script_dir="$ARGWORK_CLI_DIR/$script_sub_abs_dir"
 
     COMPREPLY=($(compgen -W "$(find "$script_dir" -mindepth 1 -maxdepth 1 -not -name '.*' -type f -name "${script_sub_name}* .sh" -printf "${script_sub_rel:+$script_sub_rel/}%f\n" -o -not -name '.*' -type d -name "${script_sub_name}*" -printf "${script_sub_rel:+$script_sub_rel/}%f/\n" | sed 's/ .sh$//g'| sort)" -- "$word")) && compopt -o filenames
     [[ $COMPREPLY == */ ]] && compopt -o nospace

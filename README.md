@@ -46,6 +46,8 @@ at  <index>  <name>  test regex    <pattern>
 at  <index>  <name>  test uuid
 at  <index>  <name>  test date
 at  <index>  <name>  test integer
+at  <index>  <name>  test decimal
+at  <index>  <name>  test float
 
 at  <index>  <name>  opts from   path/to/source
 at  <index>  <name>  opts here   <option #1> {... <option #N>}
@@ -54,7 +56,11 @@ at  <index>  <name>  opts shell  <shell script>
 at  <index>  <name>  opts file
 at  <index>  <name>  opts dir
 
-at  <index>  <name>  ...      # Dynamic continuation marker
+# Dynamic continuation marker
+at  <index>  <name>  ...
+
+# Ditto parameter augmenting
+at  -        -       <opts... | test...>
 ```
 
 `name` is a environment variable name that will be created and assigned a value corresponding to either positional of optional argument.
@@ -62,6 +68,7 @@ at  <index>  <name>  ...      # Dynamic continuation marker
 `<index>` can be one of the following:
 * `1` `2` ... for **positional** parameter
 * `_` for an **optional** parameter
+* `-` for a _ditto_ parameter
 
 ### Positional parameters
 Those are positional in traditional understanding. There must be no gaps in numbering, although there is no requirement for a strict ordering (i.e. #2 can follow #4 as long as there is #3 specified at some point as well).
@@ -88,6 +95,18 @@ This may be achieved by specifying `_` in place of a value:
 ```bash
 run WARN env: _
 ```
+
+### Ditto parameters
+You can augment an existing e.g. `opts` with one or more `test` specs. This way you get a benefit of having completion options with a type check.
+
+E.g.
+
+```
+at 1 repeat   opts here     0 25
+at - -        test integer
+at 2 do_what  opts here     step jump
+```
+
 
 ### Argument references
 
