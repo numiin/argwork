@@ -49,6 +49,20 @@ __argwork_capture_opts_shell() {
   fi
 }
 
+__argwork_expand_env_vars() {
+  local result="$1"
+  local match="$(echo "$1" | grep -o '[#]\w\+')"
+  local var_name
+  while [ ! -z "$match" ]
+  do
+    var_name="${match:1}"
+    [[ -z "${!var_name}" ]] && >&2 __argwork_error "Expanded variable [$var_name] has no value"
+    result="$(echo "$result" | sed "s/$match/${!var_name}/")"
+    match="$(echo "$result" | grep -o '[#]\w\+')"
+  done
+  echo "$result"
+}
+
 __argwork_capture_opts_command() {
   local command_name="$2"
   local command_path
@@ -58,6 +72,11 @@ __argwork_capture_opts_command() {
   else
     command_path="$command_name"
   fi
+  # perform environment variable substitutions marked by #
+  for at_index in $(seq 0 $(( ${#__argwork_arg_list[@]} - 1 )))
+  do
+    __argwork_arg_list[$at_index]="$(__argwork_expand_env_vars "${__argwork_arg_list[$at_index]}")"
+  done
   if $(eval "$command_path ${__argwork_arg_list[@]}" | grep -q "^\s*$1\s*\$")
   then
     __ARGWORK_CAPTURED="$1"
@@ -410,6 +429,8 @@ __argwork_collate_args
 # Include script that may contain customizations, functions, settings
 __argwork_global_env_path="$ARGWORK_CLI_DIR/.env.sh"
 [[ -f "$__argwork_global_env_path" ]] && . "$__argwork_global_env_path"
+__argwork_global_run_path="$ARGWORK_CLI_DIR/.run.sh"
+[[ -f "$__argwork_global_run_path" ]] && . "$__argwork_global_run_path"
 
 # Include the actual runnable script lib functions (e.g. assert) can be invoked inside run script
 __argwork_script_rel_path="$(__argwork_script_name_to_path "$__argwork_script_name")"

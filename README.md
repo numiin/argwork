@@ -70,6 +70,16 @@ at  -        -       <opts... | test...>
 * `_` for an **optional** parameter
 * `-` for a _ditto_ parameter
 
+#### `cmd`
+Use hash in any argument of a command to allow for late evaluation of environment variables.
+
+E.g.
+
+```
+at 1 chapter opts first second
+at 2 titles  cmd  get-titles title-#chapter
+```
+
 ### Positional parameters
 Those are positional in traditional understanding. There must be no gaps in numbering, although there is no requirement for a strict ordering (i.e. #2 can follow #4 as long as there is #3 specified at some point as well).
 

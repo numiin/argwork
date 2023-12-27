@@ -303,11 +303,15 @@ _argwork_completion() {
   local argwork_script_path="$(__argwork_script_name_to_path "${COMP_WORDS[1]}")"
   local argwork_abs_script_path="$ARGWORK_CLI_DIR/${argwork_script_path} .sh"
 
+
   if [ "$COMP_CWORD" -gt 1 ] && [ ! -f "$argwork_abs_script_path" ]
   then
     COMPREPLY=('' '')
     return
   fi
+
+  local argwork_global_env_path="$ARGWORK_CLI_DIR/.env.sh"
+  [[ -f "$argwork_global_env_path" ]] && . "$argwork_global_env_path"
 
   if [[ "${COMP_WORDS[$COMP_CWORD]}" == '?' ]]
   then
