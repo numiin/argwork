@@ -49,6 +49,9 @@ at  <index>  <name>  test integer
 at  <index>  <name>  test decimal
 at  <index>  <name>  test float
 
+at  <index>  <name>  test list   {text ... | regex ... | uuid | date | integer | decimal | float}
+at  -        -       test list   - #references opts from the previous line
+
 at  <index>  <name>  opts from   path/to/source
 at  <index>  <name>  opts here   <option #1> {... <option #N>}
 at  <index>  <name>  opts cmd    <command> {arg 1} {arg 2} ...
@@ -79,6 +82,36 @@ E.g.
 at 1 chapter opts first second
 at 2 titles  cmd  get-titles title-#chapter
 ```
+
+#### type list
+List parameters are supported with automatically provided completion per each element.
+
+Inside `main()` the populated list will be available as `bash` array with a name `<parameter name>_list` when the _argwork_ is run.
+
+E.g.
+```
+at 1 startDate  opts here 2021-01-04 2024-01-02 2024-01-12
+at - -          test list -
+
+main() {
+  echo "start-date values: [${startDate_list[@]}]"
+}
+```
+
+Then when run:
+
+```
+run 2024-01-02,2024-01-12
+```
+
+it will output
+
+```
+start-date values: 2024-01-02 2024-01-12
+```
+
+Completion after a comma will populate options from the first `at` line.
+
 
 ### Positional parameters
 Those are positional in traditional understanding. There must be no gaps in numbering, although there is no requirement for a strict ordering (i.e. #2 can follow #4 as long as there is #3 specified at some point as well).

@@ -29,7 +29,7 @@ __argwork_one() {
       ;;
   esac
 
-  if [[ "$index" == '_' ]]; then index="$var"; fi
+  [[ "$index" == '_' ]] && index="$var"
 
   shift 3
 
@@ -57,47 +57,39 @@ __argwork_one() {
           ;;
         dir)
           __argwork_lookup_types["$index"]='dir'
-          __argwork_lookup_values["$index"]='[/path/do/directory]'
+          __argwork_lookup_values["$index"]='[/path/to/directory]'
           ;;
         file)
           __argwork_lookup_types["$index"]='file'
-          __argwork_lookup_values["$index"]='[/path/do/file]'
+          __argwork_lookup_values["$index"]='[/path/to/file]'
           ;;
       esac
       ;;
 
     test)
-      local spec="$1"; shift
-      case "$spec" in
-        uuid)
-          __argwork_lookup_types["$index"]='uuid'
-          __argwork_lookup_values["$index"]="[UUID]"
+      local spec list_mark hint
+      case "$1" in
+        list)
+          list_mark=s
+          shift
+          spec="$1"
           ;;
-        date)
-          __argwork_lookup_types["$index"]='date'
-          __argwork_lookup_values["$index"]='[YYYY-MM-DD]'
-          ;;
-        text)
-          __argwork_lookup_types["$index"]='text'
-          __argwork_lookup_values["$index"]='[TEXT]'
-          ;;
-        regex)
-          __argwork_lookup_types["$index"]='regex'
-          __argwork_lookup_values["$index"]='[REGEX]'
-          ;;
-        integer)
-          __argwork_lookup_types["$index"]='integer'
-          __argwork_lookup_values["$index"]='[INTEGER]'
-          ;;
-        decimal)
-          __argwork_lookup_types["$index"]='decimal'
-          __argwork_lookup_values["$index"]='[DECIMAL]'
-          ;;
-        float)
-          __argwork_lookup_types["$index"]='float'
-          __argwork_lookup_values["$index"]='[FLOAT]'
+        *)
+          spec="$1"
           ;;
       esac
+      shift
+      case "$spec" in
+        uuid)    hint='UUID' ;;
+        date)    hint='YYYY-MM-DD' ;;
+        text)    hint='TEXT' ;;
+        regex)   hint='REGEX' ;;
+        integer) hint='INTEGER' ;;
+        decimal) hint='DECIMAL' ;;
+        float)   hint='FLOAT' ;;
+      esac
+      __argwork_lookup_types["$index"]="$spec$list_mark"
+      __argwork_lookup_values["$index"]="[$hint]$list_mark"
       ;;
 
     _)
@@ -113,7 +105,6 @@ __argwork_one() {
     *)
       ;;
   esac
-
 }
 
 __argwork_script_name_to_path() {
@@ -130,7 +121,7 @@ __argwork_complete() {
     sector=OPTIONAL
   fi
 
-  local key=
+  local key
   local key_shift=0
   case "$sector" in
     POSITIONAL)
@@ -158,23 +149,37 @@ __argwork_complete() {
 
   # echo "==> DEBUG: __argwork_positional_param_count=$__argwork_positional_param_count ; __argwork_optional_param_count=$__argwork_optional_param_count ; __argwork_lookup_types=$!__argwork_lookup_types[@]} ; key=$key ; __argwork_lookup_types[key]=${__argwork_lookup_types[$key]} ; __argwork_positional_arg_vars=[${__argwork_positional_arg_vars[@]}]" >> ~/argwork-completion.bash.log
 
+  local prefix=()
+  local visited_pattern
+  local word="${COMP_WORDS[$word_index]}"
+  local comp_word="${word}"
+  if [[ "$word" == *,* ]]
+  then
+    comp_word="${word##*,}"
+    prefix=( -P "${word%,*}," )
+    IFS=, ; local visited=( $(echo "$word") )
+    visited_pattern=$(IFS='|'; echo "${visited[*]}")
+    compopt -o nospace
+  fi
+
   case "${__argwork_lookup_types[$key]}" in
     from)
-      if [[ -f "${ARGWORK_CLI_DIR}/.opts/${__argwork_lookup_values[$key]}" ]]; then
-        IFS=$'\n' COMPREPLY=($(compgen -W "$(cat "${ARGWORK_CLI_DIR}/.opts/${__argwork_lookup_values[$key]}")" -- "${COMP_WORDS[$word_index]}"))
+      if [[ -f "${ARGWORK_CLI_DIR}/.opts/${__argwork_lookup_values[$key]}" ]]
+      then
+        IFS=$'\n' COMPREPLY=($(compgen -W "$(cat "${ARGWORK_CLI_DIR}/.opts/${__argwork_lookup_values[$key]}" | grep -vwE "$visited_pattern")" "${prefix[@]}" -- $comp_word))
       fi
       ;;
 
     opts)
-      split_into_lines="$(echo "${__argwork_lookup_values[$key]}" | sed 's/,/\n/g')"
-      IFS=$'\n' opts_split=($(echo "$split_into_lines"))
+      local split_into_lines="$(echo "${__argwork_lookup_values[$key]}" | sed 's/,/\n/g')"
+      IFS=$'\n' local opts_split=($(echo "$split_into_lines"))
 
-      IFS=$'\n' COMPREPLY=($(compgen -W "$(printf "%s\n" "${opts_split[@]}")" -- "${COMP_WORDS[$word_index]}"))
+      IFS=$'\n' COMPREPLY=($(compgen -W "$(printf "%s\n" "${opts_split[@]}" | grep -vwE "$visited_pattern")" "${prefix[@]}" -- "$comp_word"))
       ;;
 
     shell)
-      shell_code="${__argwork_lookup_values[$key]}"
-      IFS=$'\n' COMPREPLY=($(compgen -W "$(printf "%s\n" "$(eval "$shell_code")")" -- "${COMP_WORDS[$word_index]}"))
+      local shell_code="${__argwork_lookup_values[$key]}"
+      IFS=$'\n' COMPREPLY=($(compgen -W "$(printf "%s\n" "$(eval "$shell_code")" | grep -vwE "$visited_pattern")" "${prefix[@]}" -- "$comp_word"))
       ;;
 
     command)
@@ -188,11 +193,11 @@ __argwork_complete() {
       fi
       local command_line
       IFS= command_line="$command_path ${__argwork_command_args[@]}"
-      IFS=$'\n' COMPREPLY=($(compgen -W "$(printf "%s\n" "$(eval "$command_line")")" -- "${COMP_WORDS[$word_index]}"))
+      IFS=$'\n' COMPREPLY=($(compgen -W "$(printf "%s\n" "$(eval "$command_line")" | grep -vwE "$visited_pattern")" "${prefix[@]}" -- "$comp_word"))
       ;;
 
-    uuid | date | text | integer | decimal | float)
-      IFS=$'\n' COMPREPLY=($(compgen -W "${__argwork_lookup_values[$key]}" -- "${COMP_WORDS[$word_index]}"))
+    uuid | date | text | integer | decimal | floats | uuids | dates | texts | integers | decimals | floats)
+      IFS=$'\n' COMPREPLY=($(compgen -W "${__argwork_lookup_values[$key]}" "${prefix[@]}" -- "$comp_word"))
       ;;
 
     dir)
@@ -204,7 +209,6 @@ __argwork_complete() {
       ;;
 
     _)
-
       IFS=$'\n' COMPREPLY=($(compgen -W '_' -- "${COMP_WORDS[$word_index]}"))
       ;;
 
@@ -214,7 +218,7 @@ __argwork_complete() {
 }
 
 __argwork_complete_help() {
-  local help_spec=''
+  local help_spec
 
   for key in $(seq 1 $__argwork_positional_param_count)
   do
@@ -274,7 +278,6 @@ __argwork_complete_inspect() {
       esac
     fi
   done
-  local help_spec=''
 
   printf '\nusage (current):'
 

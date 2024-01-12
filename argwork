@@ -10,7 +10,7 @@ __argwork_message() {
   then
     >&2 echo -e "$(tput setaf 9)==> $(tput setaf 3)${message}$(tput sgr0)"
   else
-    >&2 echo -e "==> $message"
+    >&2 echo -e "ERROR: $message"
   fi
 }
 
@@ -106,13 +106,13 @@ __argwork_capture_test_text() {
   local op="$2"
   local len="$3"
 
-  local is_set=
+  local is_set
   case "$op" in
-    eq) if [[ "${#val}" -eq "$len" ]]; then is_set=1; fi ;;
-    lt) if [[ "${#val}" -lt "$len" ]]; then is_set=1; fi ;;
-    gt) if [[ "${#val}" -gt "$len" ]]; then is_set=1; fi ;;
-    le) if [[ "${#val}" -le "$len" ]]; then is_set=1; fi ;;
-    ge) if [[ "${#val}" -ge "$len" ]]; then is_set=1; fi ;;
+    eq) [[ "${#val}" -eq "$len" ]] && is_set=1; ;;
+    lt) [[ "${#val}" -lt "$len" ]] && is_set=1; ;;
+    gt) [[ "${#val}" -gt "$len" ]] && is_set=1; ;;
+    le) [[ "${#val}" -le "$len" ]] && is_set=1; ;;
+    ge) [[ "${#val}" -ge "$len" ]] && is_set=1; ;;
     '') is_set=1; ;;
   esac
   if [[ ! -z "$is_set" ]]
@@ -198,9 +198,10 @@ __argwork_record() {
 __argwork_get_at() {
   local at_index="$1"
   local var_name
-  for i in $(seq 0 "$(( ${__argwork_at_length[$at_index]} - 1))")
+  local i end_i="${__argwork_at_length[$at_index]}"
+  for (( i=0; i < $end_i; i++ ))
   do
-    var_name="__argwork_at__${at_index}__$i"
+    var_name="__argwork_at__${at_index}__${i}"
     echo "${!var_name}"
   done
 }
@@ -223,24 +224,29 @@ __argwork_one() {
   local num="$1"
   local var="$2"
   local type="$3"
-  local val=
+  local val
 
   # '_' in variable name is a bypass marker
   [[ "$var" == '_' ]] && return 0
 
-  case "$num" in
-    _)
-      val="${__argwork_arg_map["$var"]}"
-      ;;
-    *)
-      val="${__argwork_arg_map[$num]}"
-      if [[ -z "$val" ]]
-      then
-        __argwork_error "value $num:[$var] must have value"
-      fi
-        __argwork_var_map[$num]="$var"
-      ;;
-  esac
+  if [[ -z "$__argwork_val_override" ]]
+  then
+    case "$num" in
+      _)
+        val="${__argwork_arg_map["$var"]}"
+        ;;
+      *)
+        val="${__argwork_arg_map[$num]}"
+        if [[ -z "$val" ]]
+        then
+          __argwork_error "value $num:[$var] must have value"
+        fi
+          __argwork_var_map[$num]="$var"
+        ;;
+    esac
+  else
+    val="$__argwork_val_override"
+  fi
 
   if [[ -z "$var" ]]
   then
@@ -265,9 +271,11 @@ __argwork_one() {
 
   shift 3
 
+  local spec
   case "$type" in
     opts)
-      local spec="$1"; shift
+      spec="$1"
+      shift
       case "$spec" in
         from)
           __argwork_capture_opts_file "$val" "$1"
@@ -293,42 +301,51 @@ __argwork_one() {
       ;;
 
     test)
-      local spec="$1"; shift
-      case "$spec" in
-        uuid)
-          __argwork_capture_test_uuid "$val"
+      local cont
+      case "$1" in
+        list)
+          cont='list'
+          shift
+          spec="$1"
           ;;
-        date)
-          __argwork_capture_test_date "$val"
-          ;;
-        text)
-          __argwork_capture_test_text "$val" "$1" "$2" "$3"
-          ;;
-        regex)
-          __argwork_capture_test_regex "$val" "$1"
-          ;;
-        integer)
-          __argwork_capture_test_integer "$val"
-          ;;
-        decimal)
-          __argwork_capture_test_decimal "$val"
-          ;;
-        float)
-          __argwork_capture_test_float "$val"
+        *)
+          spec="$1"
           ;;
       esac
+      shift
+
+      case "$cont" in
+        list) IFS=, ; items=($val) ;;
+        *)    items=("$val") ;;
+      esac
+      for item in ${items[*]}
+      do
+        case "$spec" in
+          -)
+            local prev_at=$(( $__argwork_at_eval - 1 ))
+            __argwork_val_override="$item"
+            IFS=$'\n' args=($(__argwork_get_at $prev_at))
+            __argwork_one ${args[@]}
+            unset __argwork_val_override
+            ;;
+          uuid)    __argwork_capture_test_uuid "$item" ;;
+          date)    __argwork_capture_test_date "$item" ;;
+          text)    __argwork_capture_test_text "$item" "$1" "$2" "$3" ;;
+          regex)   __argwork_capture_test_regex "$item" "$1" ;;
+          integer) __argwork_capture_test_integer "$item" ;;
+          decimal) __argwork_capture_test_decimal "$item" ;;
+          float)   __argwork_capture_test_float "$item" ;;
+        esac
+      done
+      [[ -z "$__ARGWORK_MESSAGE" ]] && __ARGWORK_CAPTURED="$val"
+      [[ "$cont" == 'list' ]] && eval "${var}_list=(${items[@]})"
       ;;
 
-    _)
-      __argwork_capture_any "$val"
-      ;;
+    _) __argwork_capture_any "$val" ;;
 
-    ...)
-      ;;
+    ...) ;;
 
-    *)
-      __argwork_error "unknown type [$type]"
-      ;;
+    *) __argwork_error "unknown type [$type]" ;;
   esac
 
   case "$num" in
@@ -362,11 +379,7 @@ __argwork_one() {
   [[ "$__ARGWORK_IGNORE_CAPTURE" == true ]] || eval "$var='$__ARGWORK_CAPTURED'"
 }
 
-# Builds `__argwork_arg_map` dictionary where keys are names of positional or optional variables,
-# that will be used by `at` command to validate based on its expectation.
-# Argument parsing is based on the convention:
-# * first go positional arguments
-# * when the ':' in the argument is met it marks the beginning of the optional section
+# Builds `__argwork_arg_map` dictionary where keys are names of positional or optional variables
 __argwork_collate_args() {
   local sector=POSITIONAL
   local option_name=
@@ -420,7 +433,6 @@ __argwork_args=($@)
 declare -A __argwork_arg_map
 declare -A __argwork_var_map
 declare -A __argwork_msg_map
-
 declare -a __argwork_at_list
 declare -i __argwork_at_eval=0
 
@@ -440,10 +452,10 @@ __argwork_script_abs_path="$ARGWORK_CLI_DIR/${__argwork_script_rel_path} .sh"
 # Check if main function is defined
 [[ $(type -t main) != function ]] && __argwork_error 'main function not found'
 
-for at_index in $(seq 0 $(( $__argwork_at_counter - 1 )))
+for (( at_i=0; at_i < $__argwork_at_counter; at_i++ ))
 do
-  __argwork_at_eval=$at_index
-  IFS=$'\n' __argwork_one $(__argwork_get_at $at_index)
+  __argwork_at_eval=$at_i
+  IFS=$'\n' __argwork_one $(__argwork_get_at $at_i)
 done
 
 main
