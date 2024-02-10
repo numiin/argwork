@@ -66,7 +66,7 @@ __argwork_one() {
       esac
       ;;
 
-    test)
+    spec)
       local spec list_mark hint
       case "$1" in
         list)
@@ -106,6 +106,21 @@ __argwork_one() {
       ;;
   esac
 }
+
+__argwork_expand_env_vars() {
+  local result="$1"
+  local match="$(echo "$1" | grep -o '[#]\w\+')"
+  local var_name
+  while [ ! -z "$match" ]
+  do
+    var_name="${match:1}"
+    [[ -z "${!var_name}" ]] && >&2 __argwork_error "Expanded variable [$var_name] has no value"
+    result="$(echo "$result" | sed "s/$match/${!var_name}/")"
+    match="$(echo "$result" | grep -o '[#]\w\+')"
+  done
+  echo "$result"
+}
+
 
 __argwork_script_name_to_path() {
   echo "$1"
@@ -192,6 +207,13 @@ __argwork_complete() {
         command_path="$command_name"
       fi
       local command_line
+
+      # perform environment variable substitutions marked by #
+      for at_index in $(seq 0 $(( ${#__argwork_command_args[@]} - 1 )))
+      do
+        __argwork_command_args[$at_index]="$(__argwork_expand_env_vars "${__argwork_command_args[$at_index]}")"
+      done
+
       IFS= command_line="$command_path ${__argwork_command_args[@]}"
       IFS=$'\n' COMPREPLY=($(compgen -W "$(printf "%s\n" "$(eval "$command_line")" | grep -vwE "$visited_pattern")" "${prefix[@]}" -- "$comp_word"))
       ;;
@@ -334,8 +356,7 @@ _argwork_completion() {
 
   elif [ "${COMP_CWORD}" -eq 1 ]
   then
-    # The first section is completed with script names at the ARGWORK_CLI_DIR
-    # Start the script file name with a prefix '_ ' to make it available
+    # The first section is completed with script names located at the ARGWORK_CLI_DIR
     local IFS=$'\n'
     local word="${COMP_WORDS[1]}"
     local script_sub_rel="${word%/*}"
@@ -351,19 +372,15 @@ _argwork_completion() {
 
   elif [ "${COMP_CWORD}" -gt 1 ]
   then
-      # Include the actual runnable script
+      # Source the target argwork
       . "$argwork_abs_script_path"
+      # eval "$(sed '/^main() {/Q')" "$argwork_abs_script_path"
 
       __argwork_complete
     return
   fi
 }
 
-# Wire up a custom command autocompletion in .bashrc:
-# complete -o nosort -F _argwork_completion <command
-
-
-# High level interface
 at() {
   __argwork_one "$@"
 }
