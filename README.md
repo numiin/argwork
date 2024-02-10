@@ -41,16 +41,16 @@ That is why the actual command code is put into `main()` function, i.e. to prote
 ```bash
 at  <index>  <name>  _       # Matches any input
 
-at  <index>  <name>  test text     {eq | lt | gt | le | ge} <number>
-at  <index>  <name>  test regex    <pattern>
-at  <index>  <name>  test uuid
-at  <index>  <name>  test date
-at  <index>  <name>  test integer
-at  <index>  <name>  test decimal
-at  <index>  <name>  test float
+at  <index>  <name>  spec text     {eq | lt | gt | le | ge} <number>
+at  <index>  <name>  spec regex    <pattern>
+at  <index>  <name>  spec uuid
+at  <index>  <name>  spec date
+at  <index>  <name>  spec integer
+at  <index>  <name>  spec decimal
+at  <index>  <name>  spec float
 
-at  <index>  <name>  test list   {text ... | regex ... | uuid | date | integer | decimal | float}
-at  -        -       test list   - #references opts from the previous line
+at  <index>  <name>  spec list   {text ... | regex ... | uuid | date | integer | decimal | float}
+at  -        -       spec list   - #references opts from the previous line
 
 at  <index>  <name>  opts from   path/to/source
 at  <index>  <name>  opts here   <option #1> {... <option #N>}
@@ -63,7 +63,7 @@ at  <index>  <name>  opts dir
 at  <index>  <name>  ...
 
 # Ditto parameter augmenting
-at  -        -       <opts... | test...>
+at  -        -       <opts... | spec...>
 ```
 
 `name` is a environment variable name that will be created and assigned a value corresponding to either positional of optional argument.
@@ -91,7 +91,7 @@ Inside `main()` the populated list will be available as `bash` array with a name
 E.g.
 ```
 at 1 startDate  opts here 2021-01-04 2024-01-02 2024-01-12
-at - -          test list -
+at - -          spec list -
 
 main() {
   echo "start-date values: [${startDate_list[@]}]"
@@ -140,13 +140,13 @@ run WARN env: _
 ```
 
 ### Ditto parameters
-You can augment an existing e.g. `opts` with one or more `test` specs. This way you get a benefit of having completion options with a type check.
+You can augment an existing e.g. `opts` with one or more `spec` specs. This way you get a benefit of having completion options with a type check.
 
 E.g.
 
 ```
 at 1 repeat   opts here     0 25
-at - -        test integer
+at - -        spec integer
 at 2 do_what  opts here     step jump
 ```
 
@@ -208,7 +208,7 @@ Example _quasi command_ `random` in `draw` stack:
 ```bash
 at 1 color   opts here  red green yellow
 at 2 fruit   opts here  papaya mango jackfruit durian
-at _ rating  test integer
+at _ rating  spec integer
 
 main () {
   echo "$color $fruit is rated ${rating:-friendly}"
@@ -327,7 +327,7 @@ Example of `unload.sh`:
 #!/bin/bash
 
 at 1  keyspace    opts from   keyspaces
-at 2  table_name  test regex  '^[a-zA-Z0-9_]*$'
+at 2  table_name  spec regex  '^[a-zA-Z0-9_]*$'
 at _  format      opts here   csv json
 
 main() {

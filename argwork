@@ -300,7 +300,7 @@ __argwork_one() {
       esac
       ;;
 
-    test)
+    spec)
       local cont
       case "$1" in
         list)
