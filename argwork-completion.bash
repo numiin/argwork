@@ -3,7 +3,6 @@
 __argwork_one() {
   local index="$1"
   local var="$2"
-  local type="$3"
 
   if [[ "$index" != '_' && "$index" != '-' && "$var" != '_' ]]; then
     eval "$var='${COMP_WORDS[$(($index + 1))]}'"
@@ -31,77 +30,49 @@ __argwork_one() {
 
   [[ "$index" == '_' ]] && index="$var"
 
-  shift 3
+  shift 2
 
-  case "$type" in
-    opts)
-      local spec="$1"; shift
-      case "$spec" in
-        from)
-          __argwork_lookup_types["$index"]='from'
-          __argwork_lookup_values["$index"]="$1"
-          ;;
-        here)
-          local arg_list=(${@:1})
-          __argwork_lookup_types["$index"]='opts'
-          __argwork_lookup_values["$index"]=$(IFS=, ; echo "${arg_list[*]}")
-          ;;
-        shell)
-          __argwork_lookup_types["$index"]='shell'
-          __argwork_lookup_values["$index"]="$1"
-          ;;
-        cmd)
-          __argwork_lookup_types["$index"]='command'
-          __argwork_lookup_values["$index"]="$1"
-          __argwork_command_args=(${@:2})
-          ;;
-        dir)
-          __argwork_lookup_types["$index"]='dir'
-          __argwork_lookup_values["$index"]='[/path/to/directory]'
-          ;;
-        file)
-          __argwork_lookup_types["$index"]='file'
-          __argwork_lookup_values["$index"]='[/path/to/file]'
-          ;;
-      esac
-      ;;
-
-    spec)
-      local spec list_mark hint
-      case "$1" in
-        list)
-          list_mark=s
-          shift
-          spec="$1"
-          ;;
-        *)
-          spec="$1"
-          ;;
-      esac
+  for param in "$@"
+  do
+    if [[ "$param" == '::' ]]
+    then
       shift
-      case "$spec" in
-        uuid)    hint='UUID' ;;
-        date)    hint='YYYY-MM-DD' ;;
-        text)    hint='TEXT' ;;
-        regex)   hint='REGEX' ;;
-        integer) hint='INTEGER' ;;
-        decimal) hint='DECIMAL' ;;
-        float)   hint='FLOAT' ;;
-      esac
-      __argwork_lookup_types["$index"]="$spec$list_mark"
-      __argwork_lookup_values["$index"]="[$hint]$list_mark"
-      ;;
+      break
+    else
+      shift
+    fi
+  done
 
-    _)
-      __argwork_lookup_types["$index"]='_'
-      __argwork_lookup_values["$index"]=
+  local spec="$1";
+  shift
+  case "$spec" in
+    from)
+      __argwork_lookup_types["$index"]='from'
+      __argwork_lookup_values["$index"]="$1"
       ;;
-
-    ...)
-      __argwork_lookup_types["$index"]=
-      __argwork_lookup_values["$index"]=
+    here)
+      local arg_list=(${@:1})
+      __argwork_lookup_types["$index"]='opts'
+      __argwork_lookup_values["$index"]=$(IFS=, ; echo "${arg_list[*]}")
       ;;
-
+    shell)
+      __argwork_lookup_types["$index"]='shell'
+      __argwork_lookup_values["$index"]="$1"
+      ;;
+    cmd)
+      __argwork_lookup_types["$index"]='cmd'
+      __argwork_lookup_values["$index"]="$1"
+      eval "__argwork_command_args__$index=(${@:2})"
+      eval "__argwork_command_args__${index}_len=$(( ${#@} - 1 ))"
+      ;;
+    dir)
+      __argwork_lookup_types["$index"]='dir'
+      __argwork_lookup_values["$index"]='[/path/to/directory]'
+      ;;
+    file)
+      __argwork_lookup_types["$index"]='file'
+      __argwork_lookup_values["$index"]='[/path/to/file]'
+      ;;
     *)
       ;;
   esac
@@ -109,25 +80,24 @@ __argwork_one() {
 
 __argwork_expand_env_vars() {
   local result="$1"
-  local match="$(echo "$1" | grep -o '[#]\w\+')"
+  local match="$(echo "$1" | grep -o -m 1 '[#]\w\+' | head -n 1)"
   local var_name
   while [ ! -z "$match" ]
   do
     var_name="${match:1}"
-    [[ -z "${!var_name}" ]] && >&2 __argwork_error "Expanded variable [$var_name] has no value"
+    [[ -z "${!var_name}" ]] && >&2 echo "Expanded variable [$var_name] has no value"
     result="$(echo "$result" | sed "s/$match/${!var_name}/")"
-    match="$(echo "$result" | grep -o '[#]\w\+')"
+    match="$(echo "$result" | grep -o -m 1 '[#]\w\+' | head -n 1)"
   done
   echo "$result"
 }
-
 
 __argwork_script_name_to_path() {
   echo "$1"
 }
 
 __argwork_complete() {
-  # Optionals consist of three parts and are specifired like <param>:<value>
+  # Optionals consist of three parts and are specifired like <param>:<value>, i.e. 3 components
   if [[ $COMP_CWORD -gt $(($__argwork_positional_param_count + $__argwork_optional_param_count * 3 + 1)) ]]; then return; fi
 
   local sector=POSITIONAL
@@ -162,10 +132,8 @@ __argwork_complete() {
 
   local word_index=$(($COMP_CWORD + $key_shift))
 
-  # echo "==> DEBUG: __argwork_positional_param_count=$__argwork_positional_param_count ; __argwork_optional_param_count=$__argwork_optional_param_count ; __argwork_lookup_types=$!__argwork_lookup_types[@]} ; key=$key ; __argwork_lookup_types[key]=${__argwork_lookup_types[$key]} ; __argwork_positional_arg_vars=[${__argwork_positional_arg_vars[@]}]" >> ~/argwork-completion.bash.log
-
   local prefix=()
-  local visited_pattern
+  local visited_pattern # pattern for excluding argument value up to a comma (used in list completion)
   local word="${COMP_WORDS[$word_index]}"
   local comp_word="${word}"
   if [[ "$word" == *,* ]]
@@ -197,7 +165,7 @@ __argwork_complete() {
       IFS=$'\n' COMPREPLY=($(compgen -W "$(printf "%s\n" "$(eval "$shell_code")" | grep -vwE "$visited_pattern")" "${prefix[@]}" -- "$comp_word"))
       ;;
 
-    command)
+    cmd)
       local command_name="${__argwork_lookup_values[$key]}"
       local command_path
       if [[ -x "$ARGWORK_CLI_DIR/.bin/$command_name" ]]
@@ -207,19 +175,21 @@ __argwork_complete() {
         command_path="$command_name"
       fi
       local command_line
+      local arg_index=$(( $word_index - 1))
+      local command_args_var="__argwork_command_args__$arg_index"
+      declare -a args_var=()
+      local command_args_var_len="__argwork_command_args__${arg_index}_len"
+      local len="${!command_args_var_len}"
 
       # perform environment variable substitutions marked by #
-      for at_index in $(seq 0 $(( ${#__argwork_command_args[@]} - 1 )))
+      for at_index in $(seq 0 $(( $len - 1 )))
       do
-        __argwork_command_args[$at_index]="$(__argwork_expand_env_vars "${__argwork_command_args[$at_index]}")"
+        local val_at_index="$(eval "echo \"\${$command_args_var[$at_index]}\"")"
+        args_var[$at_index]="'$(__argwork_expand_env_vars "$val_at_index")'"
       done
 
-      IFS= command_line="$command_path ${__argwork_command_args[@]}"
+      IFS= command_line="$command_path ${args_var[@]}"
       IFS=$'\n' COMPREPLY=($(compgen -W "$(printf "%s\n" "$(eval "$command_line")" | grep -vwE "$visited_pattern")" "${prefix[@]}" -- "$comp_word"))
-      ;;
-
-    uuid | date | text | integer | decimal | floats | uuids | dates | texts | integers | decimals | floats)
-      IFS=$'\n' COMPREPLY=($(compgen -W "${__argwork_lookup_values[$key]}" "${prefix[@]}" -- "$comp_word"))
       ;;
 
     dir)

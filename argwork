@@ -19,244 +19,30 @@ __argwork_error() {
   exit 1
 }
 
-__argwork_capture_opts_file() {
-  if $(cat "$ARGWORK_CLI_DIR/.opts/$2" | grep -q "^$1\$")
-  then
-    __ARGWORK_CAPTURED="$1"
-  else
-    __ARGWORK_MESSAGE="value [$1] is not at [$2]"
-  fi
-}
-
-__argwork_capture_opts_values() {
-  local val="$1"
-  for el in "${__argwork_arg_list[@]}";
-  do
-    [[ "$el" == "$val" ]] && __ARGWORK_CAPTURED="$val"
-  done
-  if [[ -z "$__ARGWORK_CAPTURED" ]]
-  then
-    __ARGWORK_MESSAGE="value [$val] is not in [${__argwork_arg_list[@]}]"
-  fi
-}
-
-__argwork_capture_opts_shell() {
-  if $(eval "$2" | grep -q "^$1\$")
-  then
-    __ARGWORK_CAPTURED="$1"
-  else
-    __ARGWORK_MESSAGE="value [$1] is not found in output from [$2]"
-  fi
-}
-
-__argwork_expand_env_vars() {
-  local result="$1"
-  local match="$(echo "$1" | grep -o '[#]\w\+')"
-  local var_name
-  while [ ! -z "$match" ]
-  do
-    var_name="${match:1}"
-    [[ -z "${!var_name}" ]] && >&2 __argwork_error "Expanded variable [$var_name] has no value"
-    result="$(echo "$result" | sed "s/$match/${!var_name}/")"
-    match="$(echo "$result" | grep -o '[#]\w\+')"
-  done
-  echo "$result"
-}
-
-__argwork_capture_opts_command() {
-  local command_name="$2"
-  local command_path
-  if [[ -x "$ARGWORK_CLI_DIR/.bin/$command_name" ]]
-  then
-    command_path="$ARGWORK_CLI_DIR/.bin/$command_name"
-  else
-    command_path="$command_name"
-  fi
-  # perform environment variable substitutions marked by #
-  for at_index in $(seq 0 $(( ${#__argwork_arg_list[@]} - 1 )))
-  do
-    __argwork_arg_list[$at_index]="$(__argwork_expand_env_vars "${__argwork_arg_list[$at_index]}")"
-  done
-  if $(eval "$command_path ${__argwork_arg_list[@]}" | grep -q "^\s*$1\s*\$")
-  then
-    __ARGWORK_CAPTURED="$1"
-  else
-    __ARGWORK_MESSAGE="value [$1] is not found in output from [$2]"
-  fi
-}
-
-__argwork_capture_test_uuid() {
-  if [[ "$1" =~ ^\{?[A-F0-9a-f]{8}-[A-F0-9a-f]{4}-[A-F0-9a-f]{4}-[A-F0-9a-f]{4}-[A-F0-9a-f]{12}\}?$ ]]
-  then
-    __ARGWORK_CAPTURED="$1"
-  else
-    __ARGWORK_MESSAGE="[$1] not UUID"
-  fi
-}
-
-__argwork_capture_test_date() {
-  local val="$1"
-  local date_result="$(date -d "$val" '+%Y-%m-%d' 2>&1)"
-  local date_exit_code="$?"
-  [[ "$?" == 0 && "$date_result" == "$val" ]] && __ARGWORK_CAPTURED="$1" || __ARGWORK_MESSAGE="[$1] not DATE"
-}
-
-__argwork_capture_test_text() {
-  local val="$1"
-  local op="$2"
-  local len="$3"
-
-  local is_set
-  case "$op" in
-    eq) [[ "${#val}" -eq "$len" ]] && is_set=1; ;;
-    lt) [[ "${#val}" -lt "$len" ]] && is_set=1; ;;
-    gt) [[ "${#val}" -gt "$len" ]] && is_set=1; ;;
-    le) [[ "${#val}" -le "$len" ]] && is_set=1; ;;
-    ge) [[ "${#val}" -ge "$len" ]] && is_set=1; ;;
-    '') is_set=1; ;;
-  esac
-  if [[ ! -z "$is_set" ]]
-  then
-    __ARGWORK_CAPTURED="$val"
-  else
-    __ARGWORK_MESSAGE="[$1] out of range"
-  fi
-}
-
-__argwork_capture_test_regex() {
-  if $(echo "$1" | grep -q "$2")
-  then
-    __ARGWORK_CAPTURED="$1"
-  else
-    __ARGWORK_MESSAGE="[$1] does not match /$2/"
-  fi
-}
-
-__argwork_capture_test_integer() {
-  if [[ "$1" =~ ^[0-9]+$ ]]
-  then
-    __ARGWORK_CAPTURED="$1"
-  else
-    __ARGWORK_MESSAGE="[$1] not integer"
-  fi
-}
-
-__argwork_capture_test_decimal() {
-  if [[ "$1" =~ ^[+-]?([0-9]+)[.]?[0-9]*$ ]]
-  then
-    __ARGWORK_CAPTURED="$1"
-  else
-    __ARGWORK_MESSAGE="[$1] not decimal"
-  fi
-}
-
-__argwork_capture_test_float() {
-  if [[ "$1" =~ ^[+-]?([0-9]+)[.]?[0-9]*([Ee][+-][0-9]+)?$ ]]
-  then
-    __ARGWORK_CAPTURED="$1"
-  else
-    __ARGWORK_MESSAGE="[$1] not decimal"
-  fi
-}
-
-__argwork_capture_opts_file_path() {
-  __ARGWORK_CAPTURED="$1"
-}
-
-__argwork_capture_opts_dir_path() {
-  __ARGWORK_CAPTURED="$1"
-}
-
-__argwork_capture_any() {
-  __ARGWORK_CAPTURED="$1"
-}
-
-declare -i __argwork_at_counter=0
-
-__argwork_record() {
-  declare -i i=0
-  local ref_var_name
-  __argwork_at_length[$__argwork_at_counter]=${#@}
-  for pos in "$@"
-  do
-    if [[ $i -eq 0 && "$pos" == '-' ]]
-    then
-      ref_var_name="__argwork_at__$(( $__argwork_at_counter - 1))__0"
-      pos="${!ref_var_name}"
-    elif [[ $i -eq 1 && "$pos" == '-' ]]
-    then
-      ref_var_name="__argwork_at__$(( $__argwork_at_counter - 1))__1"
-      pos="${!ref_var_name}"
-    fi
-
-    eval "__argwork_at__${__argwork_at_counter}__$i=\"$pos\""
-    i+=1
-  done
-  __argwork_at_counter+=1
-}
-
-__argwork_get_at() {
-  local at_index="$1"
-  local var_name
-  local i end_i="${__argwork_at_length[$at_index]}"
-  for (( i=0; i < $end_i; i++ ))
-  do
-    var_name="__argwork_at__${at_index}__${i}"
-    echo "${!var_name}"
-  done
-}
-
-__argwork_lookahead() {
-  local var="$1"
-  local var_name
-  for at_index in $(seq $(( $__argwork_at_eval + 1 )) $(( $__argwork_at_counter - 1 )))
-  do
-    var_name="__argwork_at__${at_index}__1"
-    if [[ "${!var_name}" == "$var" ]]
-    then
-      echo 'yes'
-      return
-    fi
-  done
-}
-
 __argwork_one() {
   local num="$1"
   local var="$2"
   local type="$3"
   local val
 
-  # '_' in variable name is a bypass marker
-  [[ "$var" == '_' ]] && return 0
-
-  if [[ -z "$__argwork_val_override" ]]
-  then
-    case "$num" in
-      _)
-        val="${__argwork_arg_map["$var"]}"
-        ;;
-      *)
-        val="${__argwork_arg_map[$num]}"
-        if [[ -z "$val" ]]
-        then
-          __argwork_error "value $num:[$var] must have value"
-        fi
-          __argwork_var_map[$num]="$var"
-        ;;
-    esac
-  else
-    val="$__argwork_val_override"
-  fi
-
-  if [[ -z "$var" ]]
-  then
-    __argwork_error 'assertion must have variable name in second argument'
-  fi
+  case "$num" in
+    _)
+      val="${__argwork_arg_map["$var"]}"
+      ;;
+    *)
+      val="${__argwork_arg_map[$num]}"
+      if [[ -z "$val" ]]
+      then
+        __argwork_error "value $num:[$var] must have value"
+      fi
+      ;;
+  esac
 
   # Load the value from environment variable if '^'
   case "$val" in
-    '^')
+    '$')
       local env_var_name="${var^^}"
+      echo "$env_var_name"
       val="${!env_var_name}"
       ;;
     '%')
@@ -265,118 +51,14 @@ __argwork_one() {
       ;;
   esac
 
-  __ARGWORK_CAPTURED=
-  __ARGWORK_MESSAGE=
-  __ARGWORK_IGNORE_CAPTURE=false
-
-  shift 3
-
-  local spec
-  case "$type" in
-    opts)
-      spec="$1"
-      shift
-      case "$spec" in
-        from)
-          __argwork_capture_opts_file "$val" "$1"
-          ;;
-        here)
-          __argwork_arg_list=(${@:1})
-          __argwork_capture_opts_values "$val"
-          ;;
-        shell)
-          __argwork_capture_opts_shell "$val" "$1"
-          ;;
-        cmd)
-          __argwork_arg_list=(${@:2})
-          __argwork_capture_opts_command "$val" "$1"
-          ;;
-        file)
-          __argwork_capture_opts_file_path "$val"
-          ;;
-        dir)
-          __argwork_capture_opts_dir_path "$val"
-          ;;
-      esac
-      ;;
-
-    spec)
-      local cont
-      case "$1" in
-        list)
-          cont='list'
-          shift
-          spec="$1"
-          ;;
-        *)
-          spec="$1"
-          ;;
-      esac
-      shift
-
-      case "$cont" in
-        list) IFS=, ; items=($val) ;;
-        *)    items=("$val") ;;
-      esac
-      for item in ${items[*]}
-      do
-        case "$spec" in
-          -)
-            local prev_at=$(( $__argwork_at_eval - 1 ))
-            __argwork_val_override="$item"
-            IFS=$'\n' args=($(__argwork_get_at $prev_at))
-            __argwork_one ${args[@]}
-            unset __argwork_val_override
-            ;;
-          uuid)    __argwork_capture_test_uuid "$item" ;;
-          date)    __argwork_capture_test_date "$item" ;;
-          text)    __argwork_capture_test_text "$item" "$1" "$2" "$3" ;;
-          regex)   __argwork_capture_test_regex "$item" "$1" ;;
-          integer) __argwork_capture_test_integer "$item" ;;
-          decimal) __argwork_capture_test_decimal "$item" ;;
-          float)   __argwork_capture_test_float "$item" ;;
-        esac
-      done
-      [[ -z "$__ARGWORK_MESSAGE" ]] && __ARGWORK_CAPTURED="$val"
-      [[ "$cont" == 'list' ]] && eval "${var}_list=(${items[@]})"
-      ;;
-
-    _) __argwork_capture_any "$val" ;;
-
-    ...) ;;
-
-    *) __argwork_error "unknown type [$type]" ;;
-  esac
-
-  case "$num" in
-    _)
-      if [[ "$val" == '_' ]]
-      then
-        __ARGWORK_IGNORE_CAPTURE=true
-      else
-        if [[ ! -z "$val" && ! -z "$__ARGWORK_MESSAGE" ]]
-        then
-          __argwork_msg_map["$var"]="$__ARGWORK_MESSAGE"
-        fi
-        if [[ -z $(__argwork_lookahead "$var") && ! -z "${__argwork_msg_map["$var"]}" ]]
-        then
-          __argwork_error "${__argwork_msg_map["$var"]}"
-        fi
-      fi
-      ;;
-    *)
-      if [[ -z "$__ARGWORK_CAPTURED" ]]
-      then
-        __argwork_msg_map[$num]="$__ARGWORK_MESSAGE"
-        if [[ -z $(__argwork_lookahead "$var") && ! -z "${__argwork_msg_map[$num]}" ]]
-        then
-          __argwork_error "${__argwork_msg_map[$num]}"
-        fi
-      fi
-      ;;
-  esac
-
-  [[ "$__ARGWORK_IGNORE_CAPTURE" == true ]] || eval "$var='$__ARGWORK_CAPTURED'"
+  export ARGWORK_CURRENT_VALUE="$val"
+  __argwork_line_result=$(argwork-line "$@")
+  if [[ $? -eq 0 ]]
+  then
+    eval "$__argwork_line_result"
+  else
+    exit 1
+  fi
 }
 
 # Builds `__argwork_arg_map` dictionary where keys are names of positional or optional variables
@@ -419,7 +101,7 @@ __argwork_script_name_to_path() {
 
 # High-level interface
 at() {
-  __argwork_record "${@:1}"
+  __argwork_one "$@"
 }
 
 [[ -z "$ARGWORK_CLI_DIR" ]] && __argwork_error 'ARGWORK_CLI_DIR environment variable not specified'
@@ -427,14 +109,8 @@ at() {
 
 __argwork_script_name="$1"
 shift 1
-
 __argwork_args=($@)
-
 declare -A __argwork_arg_map
-declare -A __argwork_var_map
-declare -A __argwork_msg_map
-declare -a __argwork_at_list
-declare -i __argwork_at_eval=0
 
 __argwork_collate_args
 
@@ -451,11 +127,5 @@ __argwork_script_abs_path="$ARGWORK_CLI_DIR/${__argwork_script_rel_path} .sh"
 
 # Check if main function is defined
 [[ $(type -t main) != function ]] && __argwork_error 'main function not found'
-
-for (( at_i=0; at_i < $__argwork_at_counter; at_i++ ))
-do
-  __argwork_at_eval=$at_i
-  IFS=$'\n' __argwork_one $(__argwork_get_at $at_i)
-done
 
 main

@@ -13,11 +13,11 @@ In a prepared _Stack_ create a new _quasi command_:
 Invoke the command using the runner with the completion built in.
 
 ```
-[argwork-completion.bash]
+[argwork-completion.bash]   (completion)
                           \
-                            [argwork quasi command]
+                           [argwork quasi command]
                           /
-    [argwork runner]
+[argwork -> argwork-line]   (runner)
 ```
 
 Basic outline for a _quasi command_:
@@ -38,32 +38,25 @@ That is why the actual command code is put into `main()` function, i.e. to prote
 
 ### Parameter specification:
 
-```bash
-at  <index>  <name>  _       # Matches any input
+```
+at  <index>  <name>  [{<type>} {:: <opts>}]
 
-at  <index>  <name>  spec text     {eq | lt | gt | le | ge} <number>
-at  <index>  <name>  spec regex    <pattern>
-at  <index>  <name>  spec uuid
-at  <index>  <name>  spec date
-at  <index>  <name>  spec integer
-at  <index>  <name>  spec decimal
-at  <index>  <name>  spec float
+<type>          ::= [list] <spec>
+  <spec>        ::= <text> | <regex> | <uuid> | <date> | integer | decimal | float
+  <text>        ::= text [<length-op> <number>]
+    <length-op> ::= eq | lt | gt | le | ge
+  <regex>       ::= regex <pattern>
+    <pattern>   ::= <grep-style-pattern>
+  <date>        ::= <ISO 8601>
 
-at  <index>  <name>  spec list   {text ... | regex ... | uuid | date | integer | decimal | float}
-at  -        -       spec list   - #references opts from the previous line
-
-at  <index>  <name>  opts from   path/to/source
-at  <index>  <name>  opts here   <option #1> {... <option #N>}
-at  <index>  <name>  opts cmd    <command> {arg 1} {arg 2} ...
-at  <index>  <name>  opts shell  <shell script>
-at  <index>  <name>  opts file
-at  <index>  <name>  opts dir
+<opts>    ::= <from> | <here> | <command> | <shell> | file | dir
+<from>    ::= path/to/options/file
+<here>    ::= {<option>}
+<command> ::= cmd {arg}
+<shell>   ::= shell <shell script>
 
 # Dynamic continuation marker
 at  <index>  <name>  ...
-
-# Ditto parameter augmenting
-at  -        -       <opts... | spec...>
 ```
 
 `name` is a environment variable name that will be created and assigned a value corresponding to either positional of optional argument.
@@ -71,7 +64,6 @@ at  -        -       <opts... | spec...>
 `<index>` can be one of the following:
 * `1` `2` ... for **positional** parameter
 * `_` for an **optional** parameter
-* `-` for a _ditto_ parameter
 
 #### `cmd`
 Use hash in any argument of a command to allow for late evaluation of environment variables.
@@ -79,8 +71,8 @@ Use hash in any argument of a command to allow for late evaluation of environmen
 E.g.
 
 ```
-at 1 chapter opts first second
-at 2 titles  cmd  get-titles title-#chapter
+at 1 chapter :: first second
+at 2 titles  :: cmd  get-titles title-#chapter
 ```
 
 #### type list
@@ -90,8 +82,7 @@ Inside `main()` the populated list will be available as `bash` array with a name
 
 E.g.
 ```
-at 1 startDate  opts here 2021-01-04 2024-01-02 2024-01-12
-at - -          spec list -
+at 1 startDate  list :: here 2021-01-04 2024-01-02 2024-01-12
 
 main() {
   echo "start-date values: [${startDate_list[@]}]"
@@ -120,8 +111,8 @@ Those are positional in traditional understanding. There must be no gaps in numb
 Those can be omitted, or specified only once, e.g.:
 
 ```bash
-at  1  level   opts here  WARN DEBUG
-at  _  target  opts here  alpha beta other
+at  1  level   :: here  WARN DEBUG
+at  _  target  :: here  alpha beta other
 ```
 
 It is possible to have a _quasi command_ with no positional **or** no optional parameters.
@@ -139,15 +130,14 @@ This may be achieved by specifying `_` in place of a value:
 run WARN env: _
 ```
 
-### Ditto parameters
-You can augment an existing e.g. `opts` with one or more `spec` specs. This way you get a benefit of having completion options with a type check.
+### Combining parameter type constraints with completion
+You can augment an existing e.g. `::` with one or more _type_ specs. This way you get a benefit of having completion options with a type check.
 
 E.g.
 
 ```
-at 1 repeat   opts here     0 25
-at - -        spec integer
-at 2 do_what  opts here     step jump
+at 1 repeat   integer :: here  0 25
+at 2 do_what          :: here  step jump
 ```
 
 
@@ -155,22 +145,22 @@ at 2 do_what  opts here     step jump
 
 Use `%` as an argument when you want to reference environment variable named after the preceding argument value.
 
-Use `^` as an argument when you want to reference environment variable named after the parameter at its position.
+Use `$` as an argument when you want to reference environment variable named after the parameter at its position.
 
 E.g.
 
 ```
-at 1 action    opts here  move turn
-at 2 direction opts here  there back
-at 3 plane     opts here  horizonal vertical
-at 4 rate      opts here  fast slow moderate
+at 1 action    :: here  move turn
+at 2 direction :: here  there back
+at 3 plane     :: here  horizonal vertical
+at 4 rate      :: here  fast slow moderate
 
-$ run move direction % ^
+$ run move direction % $
 ```
 
 will use environment variable
 * `DIRECTION` value in place of `%`
-* `RATE` value in place of `^`
+* `RATE` value in place of `$`
 
 ### Parameter ordering
 Positional arguments must immediately follow command name.
@@ -181,7 +171,7 @@ Optional arguments must follow positional arguments.
 
 ### Manual installation
 
-* Put `argwork` executable on `PATH`
+* Put `argwork` and `argwork-line` executable on `PATH`
 * Source `argwork-completion.bash` in `.bashrc`
 
 Use symbolic links (`ln`) to make `git pull` automatically update with new changes.
@@ -206,9 +196,8 @@ source ~/.config/argwork/bash-completion.sh
 
 Example _quasi command_ `random` in `draw` stack:
 ```bash
-at 1 color   opts here  red green yellow
-at 2 fruit   opts here  papaya mango jackfruit durian
-at _ rating  spec integer
+at 1 color           :: here  red green yellow
+at 2 fruit   integer :: here  papaya mango jackfruit durian
 
 main () {
   echo "$color $fruit is rated ${rating:-friendly}"
@@ -326,9 +315,8 @@ Example of `unload.sh`:
 ```bash
 #!/bin/bash
 
-at 1  keyspace    opts from   keyspaces
-at 2  table_name  spec regex  '^[a-zA-Z0-9_]*$'
-at _  format      opts here   csv json
+at 1  keyspace    :: from  keyspaces
+at 2  table_name  regex  '^[a-zA-Z0-9_]*$' :: here  csv json
 
 main() {
   dsbulk unload -k "$keyspace" -t "$table_name" > "$table_name.${format:-csv}"

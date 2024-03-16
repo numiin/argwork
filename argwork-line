@@ -1,0 +1,321 @@
+#!/bin/bash
+
+set -e
+
+# Environment variable value $ARGWORK_CURRENT_VALUE
+# is checked agains constraints passed as arguments
+
+__argwork_msg() {
+  local message="$1"
+  if [ -t 1 ]
+  then
+    >&2 echo -e "$(tput setaf 9)ERROR: $(tput setaf 3)${message}$(tput sgr0)"
+  else
+    >&2 echo -e "ERROR: $message"
+  fi
+}
+
+__argwork_error() {
+  __argwork_msg "$1"
+  exit 1
+}
+
+__debug() {
+  if [[ "$DEBUG" == 'yes' ]]
+  then
+    >&2 echo "DEBUG: $@"
+  fi
+}
+
+__capture_opts_file() {
+  if $(cat "$ARGWORK_CLI_DIR/.opts/$2" | grep -q "^$1\$")
+  then
+    __ARGWORK_CAPTURED=yes
+  else
+    __ARGWORK_MESSAGE="value [$1] is not at [$2]"
+  fi
+}
+
+__capture_opts_inline() {
+  local val="$1"
+  for el in "${__arg_list[@]}"
+  do
+    if [[ "$el" == "$val" ]]
+    then
+      __ARGWORK_CAPTURED=yes
+      break
+    fi
+  done
+  if [[ "$__ARGWORK_CAPTURED" != 'yes' ]]
+  then
+    __ARGWORK_MESSAGE="value [$val] is not in [${__arg_list[@]}]"
+  fi
+}
+
+__capture_opts_shell() {
+  if $(eval "$2" | grep -q "^$1\$")
+  then
+    __ARGWORK_CAPTURED=yes
+  else
+    __ARGWORK_MESSAGE="value [$1] is not found in output from [$2]"
+  fi
+}
+
+__capture_opts_command() {
+  local command_name="$2"
+  local command_path
+  if [[ -x "$ARGWORK_CLI_DIR/.bin/$command_name" ]]
+  then
+    command_path="$ARGWORK_CLI_DIR/.bin/$command_name"
+  else
+    command_path="$command_name"
+  fi
+  if $(eval "$command_path ${__arg_list[@]}" | grep -q "^\s*$1\s*\$")
+  then
+    __ARGWORK_CAPTURED=yes
+  else
+    __ARGWORK_MESSAGE="value [$1] is not found in output from [$2]"
+  fi
+}
+
+__capture_test_uuid() {
+  if [[ "$1" =~ ^\{?[A-F0-9a-f]{8}-[A-F0-9a-f]{4}-[A-F0-9a-f]{4}-[A-F0-9a-f]{4}-[A-F0-9a-f]{12}\}?$ ]]
+  then
+    __ARGWORK_CAPTURED=yes
+  else
+    __ARGWORK_MESSAGE="[$1] not UUID"
+  fi
+}
+
+__capture_test_date() {
+  set +e
+  local val="$1"
+  date_result="$(date -d "$val" '+%Y-%m-%d' 2>&1)"
+  local date_exit_code="$?"
+  if [[ "$?" == 0 && "$date_result" == "$val" ]]
+  then
+    __ARGWORK_CAPTURED=yes
+  else
+    __ARGWORK_MESSAGE="[$1] not DATE"
+  fi
+  set -e
+}
+
+__capture_test_datetime() {
+  set +e
+  local val="$1"
+  date_result="$(date -d "$val" 2>&1)"
+  local date_exit_code="$?"
+  if [[ $? -eq 0 ]]
+  then
+    __ARGWORK_CAPTURED=yes
+  else
+    __ARGWORK_MESSAGE="[$1] not DATETIME"
+  fi
+  set -e
+}
+
+__capture_test_text() {
+  local val="$1"
+  local op="$2"
+  local len="$3"
+
+  local is_set
+  case "$op" in
+    eq) [[ "${#val}" -eq "$len" ]] && is_set=1; ;;
+    lt) [[ "${#val}" -lt "$len" ]] && is_set=1; ;;
+    gt) [[ "${#val}" -gt "$len" ]] && is_set=1; ;;
+    le) [[ "${#val}" -le "$len" ]] && is_set=1; ;;
+    ge) [[ "${#val}" -ge "$len" ]] && is_set=1; ;;
+    '') is_set=1; ;;
+  esac
+  if [[ ! -z "$is_set" ]]
+  then
+    __ARGWORK_CAPTURED=yes
+  else
+    __ARGWORK_MESSAGE="[$1] out of range"
+  fi
+}
+
+__capture_test_regex() {
+  if $(echo "$1" | grep -q "$2")
+  then
+    __ARGWORK_CAPTURED=yes
+  else
+    __ARGWORK_MESSAGE="[$1] does not match /$2/"
+  fi
+}
+
+__capture_test_integer() {
+  if [[ "$1" =~ ^[0-9]+$ ]]
+  then
+    __ARGWORK_CAPTURED=yes
+  else
+    __ARGWORK_MESSAGE="[$1] not integer"
+  fi
+}
+
+__capture_test_decimal() {
+  if [[ "$1" =~ ^[+-]?([0-9]+)[.]?[0-9]*$ ]]
+  then
+    __ARGWORK_CAPTURED=yes
+  else
+    __ARGWORK_MESSAGE="[$1] not decimal"
+  fi
+}
+
+__capture_test_float() {
+  if [[ "$1" =~ ^[+-]?([0-9]+)[.]?[0-9]*([Ee][+-][0-9]+)?$ ]]
+  then
+    __ARGWORK_CAPTURED=yes
+  else
+    __ARGWORK_MESSAGE="[$1] not decimal"
+  fi
+}
+
+__capture_opts_file_path() {
+  __ARGWORK_CAPTURED=yes
+}
+
+__capture_opts_dir_path() {
+  __ARGWORK_CAPTURED=yes
+}
+
+__argwork_capture_any() {
+  __ARGWORK_CAPTURED=yes
+}
+
+__item_check_spec() {
+  __debug "[spec] $@"
+  local val="$1"
+  shift
+  local spec="$1"
+  if [[ -z "$spec" ]]
+  then
+    return
+  else
+    shift
+    case "$spec" in
+      uuid)     __capture_test_uuid     "$val" ;;
+      date)     __capture_test_date     "$val" ;;
+      datetime) __capture_test_datetime "$val" ;;
+      text)     __capture_test_text     "$val" "$1" "$2" "$3" ;;
+      regex)    __capture_test_regex    "$val" "$1" ;;
+      integer)  __capture_test_integer  "$val" ;;
+      decimal)  __capture_test_decimal  "$val" ;;
+      float)    __capture_test_float    "$val" ;;
+      *)
+        __argwork_error "unexpected type spec [$spec]"
+        ;;
+    esac
+  fi
+}
+
+__item_check_opts() {
+  __debug "[opts] $@"
+  local val="$1"
+  shift
+  local spec="$1"
+  if [[ ! -z "$spec" ]]
+  then
+    shift
+    case "$spec" in
+      from)
+        __capture_opts_file "$val" "$1"
+        ;;
+      here)
+        __arg_list=(${@:1})
+        __capture_opts_inline "$val"
+        ;;
+      shell)
+        __capture_opts_shell "$val" "$1"
+        ;;
+      cmd)
+        __arg_list=(${@:2})
+        __capture_opts_command "$val" "$1"
+        ;;
+      file)
+        __capture_opts_file_path "$val"
+        ;;
+      dir)
+        __capture_opts_dir_path "$val"
+        ;;
+      '')
+        ;;
+      *)
+        __argwork_error "unexpected opts spec [$spec]"
+        ;;
+    esac
+  fi
+}
+
+__one() {
+  local val="$ARGWORK_CURRENT_VALUE"
+  local num="$1"
+  local var="$2"
+
+  case "$var" in
+    '_') return 0 ;;
+    '') __argwork_error 'no variable name' ;;
+    *) ;;
+  esac
+
+  shift 2
+
+  local container="$1" spec
+
+  case "$container" in
+    list)
+      IFS=, ; items=($val)
+      container='list'
+      shift
+      ;;
+    *)
+      items=("$val")
+      ;;
+  esac
+
+  declare -a spec_params
+  declare -a opts_params
+  for param in "$@"
+  do
+    if [[ "$param" == '::' ]]
+    then
+      shift
+      break
+    else
+      spec_params+=("$param")
+      shift
+    fi
+  done
+
+
+  for param in "$@"
+  do
+    opts_params+=("$param")
+  done
+
+  for item in ${items[*]}
+  do
+    if [[ ${#spec_params[@]} -gt 0 ]]
+    then
+      __item_check_spec "$item" "${spec_params[@]}"
+    else
+      __item_check_opts "$item" "${opts_params[@]}"
+    fi
+  done
+
+  if [[ ! -z "$__ARGWORK_MESSAGE" ]]
+  then
+     __argwork_error "$__ARGWORK_MESSAGE"
+  else
+    # Output script that may be evaluated by argwork runner
+    echo "$var='$ARGWORK_CURRENT_VALUE'"
+    case "$container" in
+      list) echo "${var}_list=(${items[@]})" ;;
+      *) ;;
+    esac
+  fi
+}
+
+__one "$@"
