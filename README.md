@@ -42,12 +42,7 @@ That is why the actual command code is put into `main()` function, i.e. to prote
 at  <index>  <name>  [{<type>} {:: <opts>}]
 
 <type>          ::= [list] <spec>
-  <spec>        ::= <text> | <regex> | <uuid> | <date> | integer | decimal | float
-  <text>        ::= text [<length-op> <number>]
-    <length-op> ::= eq | lt | gt | le | ge
-  <regex>       ::= regex <pattern>
-    <pattern>   ::= <grep-style-pattern>
-  <date>        ::= <ISO 8601>
+  <spec>        ::= <type name> {<arg>}
 
 <opts>    ::= <from> | <here> | <command> | <shell> | file | dir
 <from>    ::= path/to/options/file
@@ -60,6 +55,14 @@ at  <index>  <name>  ...
 ```
 
 `name` is a environment variable name that will be created and assigned a value corresponding to either positional of optional argument.
+
+Each `<type name>` must have an _executable_ script present in `.types` directory inside stack root.
+Any argument put after type name will be passed on to the actual executable performing the type checking.
+
+#### Type checker
+The following arguments will be passed into the type checker executable:
+1. Value to check a type against
+2. ...optional one or more arguments for type checker (e.g. `integer <from> <to>` might do a range check)
 
 `<index>` can be one of the following:
 * `1` `2` ... for **positional** parameter
@@ -95,7 +98,7 @@ Then when run:
 run 2024-01-02,2024-01-12
 ```
 
-it will output
+which will output:
 
 ```
 start-date values: 2024-01-02 2024-01-12
@@ -269,9 +272,11 @@ Directories:
 
 * `.bin` contains executable assets are made discoverable for `cmd` (same as `command`) without being on `PATH`
 * `.opts` contains asset files whose content will be used for sourcing `from` parameter specification
+* `.types` contains asset files whose content will be used for sourcing `from` parameter specification
 
 Files:
-* `.env.sh` - contains a script that will be included before each _quasi command_ (i.e. global configuration)
+* `.env.sh` - script that will be included before each _quasi command_ both during _run_ and _completion_
+* `.run.sh` - script that will be included before each _quasi command_ only during _run_
 
 
 When you have a _quasi command_ and have a need for either `.env.sh` configuration or `from` parameter (i.e. sourcing possible argument values from a file) then you must have defined a root directory for performing the respective file lookup.
@@ -288,6 +293,11 @@ An example of a _Stack base_ that would model a database access tool set:
 ```
 .bin
 .opts
+  |
+    keyspaces
+.types
+  |
+    regex
 cassandra
   |
     shell .sh
@@ -300,6 +310,7 @@ postgres
     shell .sh
 keyspaces
 .env.sh
+.run.sh
 ```
 
 After implementing `unload.sh` accordingly, you can export data from _Cassandra_ database by running the following command. It will be provided with completion for `keyspace` and `format` and will check the correctness of `table_name` format when actually run on command line:

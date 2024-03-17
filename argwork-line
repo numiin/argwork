@@ -78,110 +78,11 @@ __capture_opts_command() {
   fi
 }
 
-__capture_test_uuid() {
-  if [[ "$1" =~ ^\{?[A-F0-9a-f]{8}-[A-F0-9a-f]{4}-[A-F0-9a-f]{4}-[A-F0-9a-f]{4}-[A-F0-9a-f]{12}\}?$ ]]
-  then
-    __ARGWORK_CAPTURED=yes
-  else
-    __ARGWORK_MESSAGE="[$1] not UUID"
-  fi
-}
-
-__capture_test_date() {
-  set +e
-  local val="$1"
-  date_result="$(date -d "$val" '+%Y-%m-%d' 2>&1)"
-  local date_exit_code="$?"
-  if [[ "$?" == 0 && "$date_result" == "$val" ]]
-  then
-    __ARGWORK_CAPTURED=yes
-  else
-    __ARGWORK_MESSAGE="[$1] not DATE"
-  fi
-  set -e
-}
-
-__capture_test_datetime() {
-  set +e
-  local val="$1"
-  date_result="$(date -d "$val" 2>&1)"
-  local date_exit_code="$?"
-  if [[ $? -eq 0 ]]
-  then
-    __ARGWORK_CAPTURED=yes
-  else
-    __ARGWORK_MESSAGE="[$1] not DATETIME"
-  fi
-  set -e
-}
-
-__capture_test_text() {
-  local val="$1"
-  local op="$2"
-  local len="$3"
-
-  local is_set
-  case "$op" in
-    eq) [[ "${#val}" -eq "$len" ]] && is_set=1; ;;
-    lt) [[ "${#val}" -lt "$len" ]] && is_set=1; ;;
-    gt) [[ "${#val}" -gt "$len" ]] && is_set=1; ;;
-    le) [[ "${#val}" -le "$len" ]] && is_set=1; ;;
-    ge) [[ "${#val}" -ge "$len" ]] && is_set=1; ;;
-    '') is_set=1; ;;
-  esac
-  if [[ ! -z "$is_set" ]]
-  then
-    __ARGWORK_CAPTURED=yes
-  else
-    __ARGWORK_MESSAGE="[$1] out of range"
-  fi
-}
-
-__capture_test_regex() {
-  if $(echo "$1" | grep -q "$2")
-  then
-    __ARGWORK_CAPTURED=yes
-  else
-    __ARGWORK_MESSAGE="[$1] does not match /$2/"
-  fi
-}
-
-__capture_test_integer() {
-  if [[ "$1" =~ ^[0-9]+$ ]]
-  then
-    __ARGWORK_CAPTURED=yes
-  else
-    __ARGWORK_MESSAGE="[$1] not integer"
-  fi
-}
-
-__capture_test_decimal() {
-  if [[ "$1" =~ ^[+-]?([0-9]+)[.]?[0-9]*$ ]]
-  then
-    __ARGWORK_CAPTURED=yes
-  else
-    __ARGWORK_MESSAGE="[$1] not decimal"
-  fi
-}
-
-__capture_test_float() {
-  if [[ "$1" =~ ^[+-]?([0-9]+)[.]?[0-9]*([Ee][+-][0-9]+)?$ ]]
-  then
-    __ARGWORK_CAPTURED=yes
-  else
-    __ARGWORK_MESSAGE="[$1] not decimal"
-  fi
-}
-
 __capture_opts_file_path() {
   __ARGWORK_CAPTURED=yes
 }
 
 __capture_opts_dir_path() {
-  __ARGWORK_CAPTURED=yes
-}
-
-__argwork_capture_any() {
   __ARGWORK_CAPTURED=yes
 }
 
@@ -196,16 +97,22 @@ __item_check_spec() {
   else
     shift
     case "$spec" in
-      uuid)     __capture_test_uuid     "$val" ;;
-      date)     __capture_test_date     "$val" ;;
-      datetime) __capture_test_datetime "$val" ;;
-      text)     __capture_test_text     "$val" "$1" "$2" "$3" ;;
-      regex)    __capture_test_regex    "$val" "$1" ;;
-      integer)  __capture_test_integer  "$val" ;;
-      decimal)  __capture_test_decimal  "$val" ;;
-      float)    __capture_test_float    "$val" ;;
+      '_' | '') __ARGWORK_CAPTURED=yes ;;
       *)
-        __argwork_error "unexpected type spec [$spec]"
+        local type_handler_path="$ARGWORK_CLI_DIR/.types/$spec"
+        __ARGWORK_CAPTURED=
+        if [[ -x "$type_handler_path" ]]
+        then
+          type_check_result=`"$type_handler_path" "$val" "$@"` 2>&1
+          if [[ $? -eq 0 ]]
+          then
+            __ARGWORK_CAPTURED=yes
+          else
+            __ARGWORK_MESSAGE="$type_check_result"
+          fi
+        else
+          __ARGWORK_MESSAGE="[$spec] type handler not defined"
+        fi
         ;;
     esac
   fi

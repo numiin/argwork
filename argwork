@@ -42,7 +42,6 @@ __argwork_one() {
   case "$val" in
     '$')
       local env_var_name="${var^^}"
-      echo "$env_var_name"
       val="${!env_var_name}"
       ;;
     '%')
