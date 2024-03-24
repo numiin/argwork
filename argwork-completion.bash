@@ -142,6 +142,7 @@ __argwork_one_help() {
         then
           >&2 echo
           __argwork_help_indent+=4
+          __argwork_counter+=1
           for switch in "$@"
           do
             if [[ $(type -t ${subcommand}__${switch}) == function ]]
@@ -341,16 +342,16 @@ __argwork_complete_inspect() {
     fi
   done
 
-  printf '\nusage (current):'
+  >&2 printf "\n$(tput setaf 240)inspect$(tput sgr0):"
 
   for key in $(seq 1 $__argwork_positional_param_count)
   do
-    local field="${key}:${__argwork_positional_arg_vars[$key]}"
-    printf '\n  %s%*s = %s' "$field" "$((20-${#field}))" '' "${arg_map[$key]}"
+    local field="$(tput setaf 3)${key}$(tput setaf 238):$(tput sgr0)${__argwork_positional_arg_vars[$key]}"
+    >&2 printf "\n  %s%*s $(tput setaf 238)=$(tput sgr0) %s" "$field" "$((19 - ${#key} - ${#__argwork_positional_arg_vars[$key]}))" '' "${arg_map[$key]}"
   done
   for option_name in "${!__argwork_optional_arg_vars[@]}"
   do
-    printf '\n  %s%*s = %s' "_:$option_name" "$((18-${#option_name}))" '' "${arg_map[$option_name]}"
+    >&2 printf "\n  %s%*s $(tput setaf 238)=$(tput sgr0) %s" "$(tput setaf 13)_$(tput setaf 238):$(tput setaf 5)$option_name$(tput sgr0)" "$((18 - ${#option_name}))" '' "${arg_map[$option_name]}"
   done
   COMPREPLY=('')
 }
@@ -384,7 +385,7 @@ _argwork_completion() {
     ARGWORK_COMPLETION_MODE=HELP
     declare -i __argwork_help_indent=0
     >&2 echo
-    >&2 echo "$(tput setaf 240)usage:$(tput sgr0)"
+    >&2 echo "$(tput setaf 240)usage$(tput sgr0):"
     # Include the actual runnable script
     . "$argwork_abs_script_path"
 
