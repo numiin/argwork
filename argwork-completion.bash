@@ -1,36 +1,44 @@
 #!/bin/bash
 
 __argwork_one() {
-  local index="$1"
-  local var="$2"
+  local index var="$2"
 
-  if [[ "$index" != '_' && "$index" != '-' && "$var" != '_' ]]; then
+  case "$1" in
+    .) index="$__argwork_counter" ;;
+    *) index="$1" ;;
+  esac
+
+  if [[ "$index" != '_' && "$var" != '_' ]]
+  then
     eval "$var='${COMP_WORDS[$(($index + 1))]}'"
   fi
 
-  # update index
   case "$index" in
-    -)
-      ;;
     _)
       if [[ ! -v __argwork_optional_arg_vars[$var] ]]
       then
         __argwork_optional_param_count=$(($__argwork_optional_param_count + 1))
         __argwork_optional_arg_vars["$var"]="$var"
       fi
+      index="$var"
       ;;
     *)
       if (($__argwork_positional_param_count < $index))
       then
-        __argwork_positional_param_count=$index
+        __argwork_positional_param_count="$index"
       fi
       __argwork_positional_arg_vars[$index]="$var"
       ;;
   esac
 
-  [[ "$index" == '_' ]] && index="$var"
-
   shift 2
+
+  local subcommand
+  if [[ "$1" == '--' ]]
+  then
+    shift
+    subcommand="$1"
+  fi
 
   for param in "$@"
   do
@@ -76,6 +84,84 @@ __argwork_one() {
     *)
       ;;
   esac
+
+  if [[ ! -z "$subcommand" ]]
+  then
+    if [[ $(type -t ${subcommand}__${!var}) == function ]]
+    then
+      eval "${subcommand}__${!var}"
+    fi
+  fi
+}
+
+__argwork_one_help() {
+  local index var="$2"
+
+  case "$1" in
+    .) index="$__argwork_counter" ;;
+    *) index="$1" ;;
+  esac
+
+  if [[ "$index" != '_' && "$var" != '_' ]]
+  then
+    eval "$var='${COMP_WORDS[$(($index + 1))]}'"
+  fi
+
+  case "$index" in
+    _)
+      >&2 printf " $(tput setaf 13)($(tput setaf 5)$var$(tput setaf 13))$(tput sgr0)"
+      ;;
+    *)
+      >&2 printf " $(tput setaf 238)[$(tput setaf 11)$index$(tput setaf 238):$(tput setaf 7)$var$(tput setaf 238)]$(tput sgr0)"
+      ;;
+  esac
+
+  shift 2
+
+  local subcommand
+  if [[ "$1" == '--' ]]
+  then
+    shift
+    subcommand="$1"
+    for param in "$@"
+    do
+      if [[ "$param" == '::' ]]
+      then
+        shift
+        break
+      else
+        shift
+      fi
+    done
+
+    local spec="$1";
+    shift
+    case "$spec" in
+      here)
+        if [[ ! -z "$subcommand" ]]
+        then
+          >&2 echo
+          __argwork_help_indent+=4
+          for switch in "$@"
+          do
+            if [[ $(type -t ${subcommand}__${switch}) == function ]]
+            then
+              >&2 printf "%${__argwork_help_indent}s"
+              local save_counter="$__argwork_counter"
+              >&2 printf "$(tput setaf 3)$switch$(tput sgr0)"
+              >&2 printf "%$(( 10 - ${#switch} ))s"
+              eval "${subcommand}__${switch}"
+              __argwork_counter="$save_counter"
+              >&2 echo
+            fi
+          done
+          __argwork_help_indent+=-4
+        fi
+        ;;
+      *)
+        ;;
+    esac
+  fi
 }
 
 __argwork_expand_env_vars() {
@@ -98,7 +184,10 @@ __argwork_script_name_to_path() {
 
 __argwork_complete() {
   # Optionals consist of three parts and are specifired like <param>:<value>, i.e. 3 components
-  if [[ $COMP_CWORD -gt $(($__argwork_positional_param_count + $__argwork_optional_param_count * 3 + 1)) ]]; then return; fi
+  if [[ $COMP_CWORD -gt $(($__argwork_positional_param_count + $__argwork_optional_param_count * 3 + 1)) ]]
+  then
+    return
+  fi
 
   local sector=POSITIONAL
   if (( $__argwork_positional_param_count > 0 && $COMP_CWORD > $__argwork_positional_param_count + 1))
@@ -209,25 +298,6 @@ __argwork_complete() {
   esac
 }
 
-__argwork_complete_help() {
-  local help_spec
-
-  for key in $(seq 1 $__argwork_positional_param_count)
-  do
-    local spec=
-    local var_name="${__argwork_positional_arg_vars[$key]}"
-    if [[ "$var_name" == '_' ]]; then
-      spec='...'
-    else
-      spec="$key:$var_name"
-    fi
-    help_spec="$help_spec  [$spec]"
-  done
-  local optional_arg_spec="${__argwork_optional_arg_vars[@]}"
-  help_spec="$help_spec  ${optional_arg_spec:+($optional_arg_spec)}"
-  COMPREPLY=("usage:$help_spec" '')
-}
-
 __argwork_complete_inspect() {
   declare -A arg_map
   local sector=POSITIONAL
@@ -291,13 +361,14 @@ _argwork_completion() {
   declare -a __argwork_positional_arg_vars
   declare -A __argwork_optional_arg_vars
 
-  __argwork_positional_param_count=0
-  __argwork_optional_param_count=0
+  declare -i __argwork_counter=0
+  declare -i __argwork_positional_param_count=0
+  declare -i __argwork_optional_param_count=0
+
   __argwork_positional_arg_vars[0]=
 
   local argwork_script_path="$(__argwork_script_name_to_path "${COMP_WORDS[1]}")"
   local argwork_abs_script_path="$ARGWORK_CLI_DIR/${argwork_script_path} .sh"
-
 
   if [ "$COMP_CWORD" -gt 1 ] && [ ! -f "$argwork_abs_script_path" ]
   then
@@ -308,16 +379,22 @@ _argwork_completion() {
   local argwork_global_env_path="$ARGWORK_CLI_DIR/.env.sh"
   [[ -f "$argwork_global_env_path" ]] && . "$argwork_global_env_path"
 
-  if [[ "${COMP_WORDS[$COMP_CWORD]}" == '?' ]]
+  if [[ "${COMP_WORDS[$COMP_CWORD]}" == '?' && $COMP_TYPE == 63 ]]
   then
+    ARGWORK_COMPLETION_MODE=HELP
+    declare -i __argwork_help_indent=0
+    >&2 echo
+    >&2 echo "$(tput setaf 240)usage:$(tput sgr0)"
     # Include the actual runnable script
     . "$argwork_abs_script_path"
 
-    __argwork_complete_help
+    COMPREPLY=('')
+    >&2 echo
     return
 
   elif [[ "${COMP_WORDS[$COMP_CWORD]}" == '??' && $COMP_TYPE == 63 ]]
   then
+    ARGWORK_COMPLETION_MODE=INSPECT
     # Include the actual runnable script
     . "$argwork_abs_script_path"
 
@@ -342,15 +419,21 @@ _argwork_completion() {
 
   elif [ "${COMP_CWORD}" -gt 1 ]
   then
-      # Source the target argwork
-      . "$argwork_abs_script_path"
-      # eval "$(sed '/^main() {/Q')" "$argwork_abs_script_path"
+    ARGWORK_COMPLETION_MODE=COMPLETE
+    # Source the target argwork
+    . "$argwork_abs_script_path"
+    # eval "$(sed '/^main() {/Q')" "$argwork_abs_script_path"
 
-      __argwork_complete
+    __argwork_complete
     return
   fi
 }
 
 at() {
-  __argwork_one "$@"
+  __argwork_counter+=1
+  case "$ARGWORK_COMPLETION_MODE" in
+    HELP)     __argwork_one_help "$@" ;;
+    INSPECT)  __argwork_one "$@" ;;
+    COMPLETE) __argwork_one "$@" ;;
+  esac
 }

@@ -39,10 +39,13 @@ That is why the actual command code is put into `main()` function, i.e. to prote
 ### Parameter specification:
 
 ```
-at  <index>  <name>  [{<type>} {:: <opts>}]
+at  <index>  <name>  [{<type> | <subscommand>} {:: <opts>}]
 
-<type>          ::= [list] <spec>
-  <spec>        ::= <type name> {<arg>}
+<type>       ::= [list] <spec>
+  <spec>     ::= <type name> {<arg>}
+
+<subcommand> ::= -- <sub-name>
+  <sub-name> ::= <bash identifier>
 
 <opts>    ::= <from> | <here> | <command> | <shell> | file | dir
 <from>    ::= path/to/options/file
@@ -59,6 +62,41 @@ at  <index>  <name>  ...
 Each `<type name>` must have an _executable_ script present in `.types` directory inside stack root.
 Any argument put after type name will be passed on to the actual executable performing the type checking.
 
+`subcommand` may be used only in positional section.
+`sub-name` is a identifier prefix used to form a function for each subcommand branch.
+Option description (i.e. `::`) must follow such definition to provide sub-command names.
+`subcommand`s can be nested.
+
+Example:
+
+```
+# This function is not a requirement,
+# but because `bash` function must be declared ahead
+# this is just for more intuitive code formatting
+setup() {
+  at . id        integer :: here 1 2 3 4 5
+  at . switch -- mode    :: here  state history
+}
+
+mode_history() {
+  # Any typical `at` parameter specifications
+  # which can also contain nested subcommand(s)
+}
+
+mode_state() {
+  # Can be just a `return` statement
+  # in case of a trivial subcommand
+  return
+}
+
+setup
+
+main() {
+  ...
+}
+```
+
+
 #### Type checker
 The following arguments will be passed into the type checker executable:
 1. Value to check a type against
@@ -66,6 +104,7 @@ The following arguments will be passed into the type checker executable:
 
 `<index>` can be one of the following:
 * `1` `2` ... for **positional** parameter
+* `.` for automatically numbered **positional** parameter
 * `_` for an **optional** parameter
 
 #### `cmd`

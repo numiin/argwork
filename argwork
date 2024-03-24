@@ -20,11 +20,12 @@ __argwork_error() {
 }
 
 __argwork_one() {
-  local num="$1"
-  local var="$2"
-  local type="$3"
-  local val
+  local num var="$2" type="$3" val
 
+  case "$1" in
+    .) num="$__argwork_counter" ;;
+    *) num="$1" ;;
+  esac
   case "$num" in
     _)
       val="${__argwork_arg_map["$var"]}"
@@ -79,10 +80,14 @@ __argwork_collate_args() {
     else
       case $sector in
         OPTIONAL)
-          if [[ -z "$option_name" ]]; then
+          if [[ -z "$option_name" ]]
+          then
             __argwork_error "no option name preceeding its value [$word]"
           fi
-          __argwork_arg_map["$option_name"]="$word"
+          if [[ "$word" != '_' ]]
+          then
+            __argwork_arg_map["$option_name"]="$word"
+          fi
           option_name=
           ;;
         POSITIONAL)
@@ -100,6 +105,7 @@ __argwork_script_name_to_path() {
 
 # High-level interface
 at() {
+  __argwork_counter+=1
   __argwork_one "$@"
 }
 
@@ -110,6 +116,7 @@ __argwork_script_name="$1"
 shift 1
 __argwork_args=($@)
 declare -A __argwork_arg_map
+declare -i __argwork_counter=0
 
 __argwork_collate_args
 
