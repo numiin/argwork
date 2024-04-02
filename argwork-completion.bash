@@ -165,20 +165,6 @@ __argwork_one_help() {
   fi
 }
 
-__argwork_expand_env_vars() {
-  local result="$1"
-  local match="$(echo "$1" | grep -o -m 1 '[#]\w\+' | head -n 1)"
-  local var_name
-  while [ ! -z "$match" ]
-  do
-    var_name="${match:1}"
-    [[ -z "${!var_name}" ]] && >&2 echo "Expanded variable [$var_name] has no value"
-    result="$(echo "$result" | sed "s/$match/${!var_name}/")"
-    match="$(echo "$result" | grep -o -m 1 '[#]\w\+' | head -n 1)"
-  done
-  echo "$result"
-}
-
 __argwork_script_name_to_path() {
   echo "$1"
 }
@@ -265,17 +251,14 @@ __argwork_complete() {
         command_path="$command_name"
       fi
       local command_line
-      local arg_index=$(( $word_index - 1))
-      local command_args_var="__argwork_command_args__$arg_index"
+      local command_args_var="__argwork_command_args__$key"
       declare -a args_var=()
-      local command_args_var_len="__argwork_command_args__${arg_index}_len"
+      local command_args_var_len="__argwork_command_args__${key}_len"
       local len="${!command_args_var_len}"
 
-      # perform environment variable substitutions marked by #
       for at_index in $(seq 0 $(( $len - 1 )))
       do
-        local val_at_index="$(eval "echo \"\${$command_args_var[$at_index]}\"")"
-        args_var[$at_index]="'$(__argwork_expand_env_vars "$val_at_index")'"
+        args_var[$at_index]="$(eval "echo \"\${$command_args_var[$at_index]}\"")"
       done
 
       IFS= command_line="$command_path ${args_var[@]}"
