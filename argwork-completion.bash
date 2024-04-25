@@ -177,7 +177,7 @@ __argwork_complete() {
   fi
 
   local sector=POSITIONAL
-  if (( $__argwork_positional_param_count > 0 && $COMP_CWORD > $__argwork_positional_param_count + 1))
+  if [[ $COMP_CWORD -gt $(( $__argwork_positional_param_count + 1 )) ]]
   then
     sector=OPTIONAL
   fi
